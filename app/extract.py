@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from .pages import Document
@@ -81,20 +82,37 @@ def clean(raw: dict) -> dict:
     return out
 
 
-async def run_claude(workdir: str, files: list[str]) -> tuple[dict, str]:
+def usage_of(out: dict) -> dict:
+    """Tokens and the list-price cost of one run, summed over models (claude-pool bills a subscription, not this)."""
+    models = (out.get("modelUsage") or {}).values()
+    total = lambda k: sum(int(m.get(k) or 0) for m in models)  # noqa: E731
+    return {
+        "input_tokens": total("inputTokens"),
+        "output_tokens": total("outputTokens"),
+        "cache_read_tokens": total("cacheReadInputTokens"),
+        "cache_write_tokens": total("cacheCreationInputTokens"),
+        "cost_usd": round(float(out.get("total_cost_usd") or 0), 5),
+    }
+
+
+async def run_claude(workdir: str, files: list[str]) -> tuple[dict, str, dict]:
+    # Our prompt replaces Claude Code's own system prompt, and no settings, skills or plugins load:
+    # that cuts the fixed overhead of a run from ~32k to ~1.5k tokens.
     args = [
         claude_bin(), "-p", "--output-format", "json", "--json-schema", json.dumps(SCHEMA),
         "--model", MODEL, "--no-session-persistence", "--strict-mcp-config", "--max-turns", "6",
+        "--system-prompt", PROMPT, "--disable-slash-commands", "--setting-sources", "",
         "--tools", "Read", "--allowedTools", ",".join(f"Read(./{f})" for f in files),
         "--permission-mode", "dontAsk",
     ]  # fmt: skip
+    task = f"Read {' and '.join(f'./{f}' for f in files)}, then answer in the schema."
     env = {**os.environ, "CLAUDE_POOL_FRESH": "0"}
     proc = await asyncio.create_subprocess_exec(
         *args, cwd=workdir, env=env,
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )  # fmt: skip
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(PROMPT.encode()), TIMEOUT)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(task.encode()), TIMEOUT)
     except TimeoutError:
         proc.kill()
         await proc.wait()
@@ -109,7 +127,7 @@ async def run_claude(workdir: str, files: list[str]) -> tuple[dict, str]:
         why = out.get("result") or out.get("errors") or stderr.decode()[-300:]
         raise ExtractError(f"claude error ({out.get('subtype')}, exit {proc.returncode}): {str(why)[:300]}")
     model = next(iter(out.get("modelUsage") or {}), MODEL)
-    return out["structured_output"], model
+    return out["structured_output"], model, usage_of(out)
 
 
 def write_pngs(doc: Document, tmp: str) -> list[str]:
@@ -125,14 +143,16 @@ def write_pngs(doc: Document, tmp: str) -> list[str]:
 async def extract(doc: Document, batch: bool = False) -> dict:
     """The flat result: link to the case first, then ZPIZ's 14 fields, then what to double-check."""
     async with BATCH_SLOTS if batch else SINGLE_SLOTS:
+        started = time.monotonic()  # after the queue: this is how long reading took, not waiting
         with tempfile.TemporaryDirectory(prefix="ld-") as tmp:
             files = await asyncio.to_thread(write_pngs, doc, tmp)
             try:
-                raw, model = await run_claude(tmp, files)
+                raw, model, usage = await run_claude(tmp, files)
             except ExtractError as e:
                 if e.exhausted:
                     raise
-                raw, model = await run_claude(tmp, files)  # one retry: runs that start together sometimes fail
+                raw, model, usage = await run_claude(tmp, files)  # one retry: runs that start together sometimes fail
+        usage = {"duration_ms": round((time.monotonic() - started) * 1000), **usage}
     data = clean(raw)
     qr = doc.qr or {}
     warnings = []
@@ -156,4 +176,5 @@ async def extract(doc: Document, batch: bool = False) -> dict:
         "warnings": warnings,
         "pages": [p.name for p in doc.pages],
         "model": model,
+        "usage": usage,
     }
