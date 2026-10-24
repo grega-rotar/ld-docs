@@ -6,13 +6,13 @@ services:
     image: ghcr.io/grega-rotar/ld-docs:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env  # API_KEYS (comma-separated), optional CLAUDE_MODEL / MAX_PARALLEL / JOB_TTL_DAYS
-    # The server-wide Traefik in /srv/edge routes id-docs.etiam.si here.
+    # The server-wide Traefik in /srv/edge routes ld-docs.etiam.si here.
     networks:
       - default
       - edge
     labels:
       - traefik.enable=true
-      - traefik.http.routers.ld-docs.rule=Host(`id-docs.etiam.si`)
+      - traefik.http.routers.ld-docs.rule=Host(`ld-docs.etiam.si`)
       - traefik.http.services.ld-docs.loadbalancer.server.port=8000
     environment:
       CLAUDE_POOL_SERVER_ID: t4a
