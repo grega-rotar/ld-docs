@@ -4,158 +4,583 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LD dokumenti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@300..600&display=swap" rel="stylesheet">
+<!-- In-browser TIFF previews (the scans are CCITT G4 TIFFs) and ZIP unpacking. -->
+<script src="https://cdn.jsdelivr.net/npm/pako@1.0.11/dist/pako_inflate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#667085; --line:#e4e7ec; --accent:#2f5bea; --warn:#fff4d6; --warnfg:#8a5a00; --err:#fde8e8; --errfg:#b42318; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1a1e24; --fg:#e6e8eb; --muted:#98a2b3; --line:#2b313a; --accent:#7c9bff; --warn:#3a2f12; --warnfg:#f5c451; --err:#3b1717; --errfg:#ff8a80; } }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width:1200px; margin:0 auto; padding:24px 16px 48px; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  p.sub { margin:0 0 20px; color:var(--muted); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
-  label { font-weight:600; display:block; margin-bottom:6px; }
-  input[type=password] { width:100%; max-width:420px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
-  #drop { border:2px dashed var(--line); border-radius:10px; padding:28px; text-align:center; color:var(--muted); cursor:pointer; }
-  #drop.over { border-color:var(--accent); color:var(--accent); }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font-weight:600; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:default; }
-  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
-  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
-  #status { color:var(--muted); }
-  .table-wrap { overflow-x:auto; }
-  table { border-collapse:collapse; width:100%; font-size:13px; }
-  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; white-space:nowrap; }
-  th { color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--card); }
-  td.unsure { background:var(--warn); color:var(--warnfg); font-weight:600; }
-  tr.error td { background:var(--err); color:var(--errfg); }
-  td.notes { white-space:normal; min-width:260px; color:var(--muted); }
-  .null { color:var(--muted); opacity:.5; }
-  progress { width:240px; }
+:root {
+  /* scanner glass, the sheet, printed ink, ballpoint, the clerk's highlighter */
+  --bed: #E6EBF0;
+  --sheet: #FFFFFF;
+  --ink: #12161B;
+  --ink-2: #5A6470;
+  --rule: #D3DAE1;
+  --dot: #9EA9B5;
+  --pen: #2341C4;
+  --hl: #FFE14D;
+  --hl-ink: #12161B;
+  --err: #B8322A;
+  --ok: #1E7A4C;
+  --shadow: 0 1px 0 rgba(18,22,27,.04), 0 12px 32px -18px rgba(18,22,27,.28);
+  --display: "Archivo", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, sans-serif;
+  --mono: "Spline Sans Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bed: #0D1013;
+    --sheet: #161A1F;
+    --ink: #E7EAEE;
+    --ink-2: #95A0AB;
+    --rule: #262C34;
+    --dot: #4A5561;
+    --pen: #9FB2FF;
+    --hl: rgba(255, 214, 10, .30);
+    --hl-ink: #FFF1A6;
+    --err: #FF8A7E;
+    --ok: #6FD3A0;
+    --shadow: 0 0 0 1px #20262D, 0 16px 40px -20px rgba(0,0,0,.8);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bed);
+  color: var(--ink);
+  font: 15px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; border-radius: 4px; }
+button { font: inherit; color: inherit; }
+
+/* ---------- header ---------- */
+.top {
+  display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  padding: 18px 28px; border-bottom: 1px solid var(--rule);
+}
+.brand { display: flex; align-items: baseline; gap: 14px; margin-right: auto; }
+.brand h1 {
+  margin: 0; font: 800 22px/1 var(--display); font-stretch: 125%; letter-spacing: .02em; text-transform: uppercase;
+}
+.brand span { color: var(--ink-2); font-size: 13px; }
+.key { display: flex; align-items: center; gap: 10px; }
+.key label { font: 600 11px/1 var(--display); font-stretch: 112%; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+.key input {
+  width: 260px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--sheet); color: var(--ink); font: 13px var(--mono);
+}
+.key .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dot); }
+.key .dot.on { background: var(--ok); }
+
+/* ---------- empty state: the form's own sample-digit strip ---------- */
+.intake { max-width: 980px; margin: 0 auto; padding: 72px 28px 40px; }
+.drop {
+  position: relative; display: block; cursor: pointer;
+  background: var(--sheet); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 56px 48px 44px; text-align: center; transition: transform .2s ease, box-shadow .2s ease;
+}
+.drop::after {
+  content: ""; position: absolute; inset: 12px; border: 1.5px dashed var(--dot); border-radius: 8px; pointer-events: none;
+  transition: border-color .2s;
+}
+.drop:hover::after, .drop.over::after { border-color: var(--pen); }
+.drop.over { transform: scale(1.01); }
+.sample { display: inline-flex; gap: 8px; margin-bottom: 36px; }
+.sample i {
+  width: 58px; height: 74px; display: grid; place-items: center;
+  border: 2px dotted var(--dot); border-radius: 3px;
+  font: 300 44px/1 var(--mono); font-style: normal; color: var(--pen);
+  opacity: 0; transform: translateY(6px); animation: ink .5s ease forwards;
+}
+.sample i:nth-child(1){animation-delay:.05s}.sample i:nth-child(2){animation-delay:.12s}.sample i:nth-child(3){animation-delay:.19s}
+.sample i:nth-child(4){animation-delay:.26s}.sample i:nth-child(5){animation-delay:.33s}.sample i:nth-child(6){animation-delay:.40s}
+.sample i:nth-child(7){animation-delay:.47s}.sample i:nth-child(8){animation-delay:.54s}.sample i:nth-child(9){animation-delay:.61s}
+@keyframes ink { to { opacity: 1; transform: none; } }
+.drop h2 { margin: 0 0 8px; font: 700 30px/1.15 var(--display); font-stretch: 110%; }
+.drop p { margin: 0 auto; max-width: 560px; color: var(--ink-2); }
+.drop .formats { margin-top: 22px; font: 12px var(--mono); color: var(--ink-2); letter-spacing: .04em; }
+.how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 28px; background: var(--rule); border-radius: 10px; overflow: hidden; }
+.how div { background: var(--bed); padding: 16px 18px; font-size: 13.5px; color: var(--ink-2); }
+.how b { display: block; margin-bottom: 4px; color: var(--ink); font: 600 11px/1.2 var(--display); font-stretch: 112%; letter-spacing: .12em; text-transform: uppercase; }
+
+/* ---------- working area ---------- */
+.work { display: none; grid-template-columns: 270px minmax(600px, 1.35fr) minmax(300px, 0.75fr); height: calc(100vh - 69px); }
+body.has-docs .intake { display: none; }
+body.has-docs .work { display: grid; }
+
+.queue { border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-height: 0; }
+.qhead { padding: 16px 18px 12px; border-bottom: 1px solid var(--rule); }
+.qhead .count { font: 700 28px/1 var(--display); font-stretch: 115%; }
+.qhead .count small { font: 500 13px var(--body); color: var(--ink-2); margin-left: 6px; }
+.bar { height: 3px; background: var(--rule); border-radius: 2px; margin: 12px 0 10px; overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--pen); transition: width .4s ease; }
+.qstats { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink-2); }
+.qstats b { color: var(--ink); font-weight: 600; }
+.qactions { display: flex; gap: 8px; margin-top: 12px; }
+.btn {
+  border: 1px solid var(--rule); background: var(--sheet); border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+}
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+.list { overflow-y: auto; flex: 1; padding: 6px; }
+.item {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; text-align: left;
+  padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  animation: arrive .3s ease;
+}
+@keyframes arrive { from { opacity: 0; transform: translateX(-4px); } }
+.item:hover { background: color-mix(in srgb, var(--sheet) 60%, transparent); }
+.item.sel { background: var(--sheet); box-shadow: var(--shadow); }
+.item .case { font: 500 13.5px var(--mono); }
+.item .pages { grid-column: 1; font-size: 11.5px; color: var(--ink-2); font-family: var(--mono); }
+.item .tag { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.tag.check { background: var(--hl); color: var(--hl-ink); padding: 2px 7px; border-radius: 3px; transform: rotate(-1.5deg); }
+.tag.clear { color: var(--ok); }
+.tag.err { color: var(--err); }
+.tag.wait { color: var(--ink-2); font-weight: 500; }
+.tag.wait::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--dot); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ---------- the form mirror ---------- */
+.mirror { overflow-y: auto; padding: 24px 28px 60px; min-height: 0; }
+.sheet { background: var(--sheet); border-radius: 12px; box-shadow: var(--shadow); padding: 26px 30px 30px; max-width: 760px; margin: 0 auto; }
+.ids { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 18px; padding-bottom: 20px; border-bottom: 1px solid var(--rule); }
+.ids .f .v { font-size: 17px; }
+.sec { margin-top: 24px; }
+.sec > h3 {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 14px;
+  font: 700 11px/1 var(--display); font-stretch: 118%; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2);
+}
+.sec > h3::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.f { position: relative; min-width: 0; }
+.f .l { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+.f .v { position: relative; display: inline-flex; align-items: center; gap: 6px; font: 500 15px var(--mono); padding: 1px 4px; margin-left: -4px; isolation: isolate; }
+.f .v.pen { color: var(--pen); }
+.f .v.none { color: var(--dot); }
+/* the highlighter stroke on anything the reader should check */
+.f.hl .v::before {
+  content: ""; position: absolute; z-index: -1; left: -4px; right: -6px; top: 18%; bottom: 4%;
+  background: var(--hl); border-radius: 3px 8px 4px 9px; transform: rotate(-1.2deg) skewX(-8deg);
+  transform-origin: left; animation: swipe .45s cubic-bezier(.3,.7,.3,1) both;
+}
+.f.hl .v { color: var(--hl-ink); }
+@keyframes swipe { from { transform: rotate(-1.2deg) skewX(-8deg) scaleX(0); } }
+.conf { display: flex; align-items: center; gap: 6px; margin-top: 5px; font: 11px var(--mono); color: var(--ink-2); }
+.conf .m { width: 44px; height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.conf .m span { display: block; height: 100%; background: var(--ink-2); }
+.f.hl .conf { color: var(--ink); }
+.f.hl .conf .m span { background: var(--ink); }
+
+.yesno { display: flex; gap: 18px; align-items: center; }
+.box {
+  display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--body); color: var(--ink-2);
+}
+.box::before {
+  content: ""; width: 15px; height: 15px; border: 1.5px solid var(--ink); border-radius: 2px; flex: none;
+  background: transparent;
+}
+.box.on { color: var(--ink); font-weight: 600; }
+.box.on::before {
+  background:
+    linear-gradient(45deg, transparent 44%, var(--pen) 44% 56%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, var(--pen) 44% 56%, transparent 56%);
+}
+.boxes { display: flex; flex-wrap: wrap; gap: 6px 11px; }
+.boxes .box { font-size: 12.5px; }
+
+.row { display: grid; grid-template-columns: 22px 1fr; gap: 14px 18px; padding: 16px 0; border-top: 1px dashed var(--rule); }
+.row:first-of-type { border-top: 0; padding-top: 4px; }
+.row .n { grid-row: span 2; font: 700 12px var(--display); font-stretch: 120%; color: var(--dot); padding-top: 22px; }
+.row .pair { display: grid; grid-template-columns: auto 1fr; gap: 14px 30px; align-items: start; }
+.row.empty { grid-template-columns: 22px 1fr auto; align-items: center; padding: 10px 0; }
+.row.empty .n { grid-row: auto; padding: 0; }
+.row.empty .what { color: var(--dot); font-size: 13px; }
+.row.empty .conf { margin: 0; }
+
+/* amount in the form's own dotted digit boxes */
+.comb { display: inline-flex; align-items: flex-end; gap: 3px; }
+.comb i {
+  width: 22px; height: 30px; display: grid; place-items: center; border: 1.5px dotted var(--dot); border-radius: 2px;
+  font: 400 17px/1 var(--mono); font-style: normal; color: var(--pen);
+}
+.comb b { font: 700 18px/1 var(--mono); color: var(--ink); margin: 0 1px; }
+.f.hl .comb i { color: var(--hl-ink); border-color: color-mix(in srgb, var(--ink) 35%, transparent); }
+
+.hand { display: grid; grid-template-columns: auto 1fr 1fr; gap: 18px 28px; align-items: start; }
+.line { display: inline-block; min-width: 140px; border-bottom: 1.5px solid var(--ink); padding: 0 4px 2px; }
+.notes { margin-top: 24px; padding: 14px 16px; border-left: 3px solid var(--hl); background: color-mix(in srgb, var(--hl) 14%, transparent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+.notes p { margin: 0 0 6px; } .notes p:last-child { margin: 0; }
+.notes .warn { color: var(--err); font-weight: 600; }
+.errorbox { padding: 18px 20px; border-radius: 10px; background: color-mix(in srgb, var(--err) 10%, var(--sheet)); color: var(--err); font-weight: 600; }
+.meta { margin-top: 16px; display: flex; justify-content: space-between; gap: 12px; font: 11.5px var(--mono); color: var(--ink-2); }
+
+/* ---------- the scan ---------- */
+.scan { border-left: 1px solid var(--rule); display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; gap: 4px; padding: 12px 14px; border-bottom: 1px solid var(--rule); align-items: center; }
+.tab { border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.tab.on { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow); }
+.tabs .hint { margin-left: auto; font-size: 11.5px; color: var(--ink-2); }
+.view { flex: 1; overflow: auto; padding: 14px; min-height: 0; }
+.view img { display: block; width: 100%; height: auto; background: #fff; border-radius: 4px; box-shadow: var(--shadow); cursor: zoom-in; }
+.view.zoom img { width: 220%; max-width: none; cursor: zoom-out; }
+@media (prefers-color-scheme: dark) { .view img { filter: invert(.92) hue-rotate(180deg); box-shadow: none; } }
+.view .ph { height: 100%; display: grid; place-items: center; color: var(--ink-2); font-size: 13px; text-align: center; padding: 20px; }
+
+kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); }
+
+@media (max-width: 1180px) {
+  .work { grid-template-columns: 250px 1fr; }
+  .scan { grid-column: 2; border-left: 0; border-top: 1px solid var(--rule); height: 70vh; }
+  .work { height: auto; }
+  .mirror { overflow: visible; }
+}
+@media (max-width: 760px) {
+  .top { padding: 14px 16px; }
+  .key, .key input { width: 100%; }
+  .intake { padding: 32px 16px; }
+  .drop { padding: 36px 18px 28px; }
+  .sample { gap: 4px; }
+  .sample i { width: 28px; height: 38px; font-size: 22px; }
+  .how { grid-template-columns: 1fr; }
+  .work { grid-template-columns: 1fr; }
+  .queue { border-right: 0; border-bottom: 1px solid var(--rule); max-height: 45vh; }
+  .scan { grid-column: 1; }
+  .mirror { padding: 16px; }
+  .sheet { padding: 18px 16px; }
+  .ids, .hand, .row .pair { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before { animation: none !important; transition: none !important; }
+  .sample i { opacity: 1; transform: none; }
+}
 </style>
 </head>
 <body>
-<main>
-  <h1>LD dokumenti</h1>
-  <p class="sub">Izjava o višini tuje pokojnine → JSON. 1–2 strani = en dokument; več strani ali ZIP = paketna obdelava (strani se razvrstijo po imenu, dokumenti se ločijo po QR kodi).</p>
-
-  <div class="card">
+<header class="top">
+  <div class="brand"><h1>LD dokumenti</h1><span>Izjava o višini tuje pokojnine</span></div>
+  <div class="key">
+    <span class="dot" id="keydot"></span>
     <label for="key">API ključ</label>
-    <input id="key" type="password" autocomplete="off" placeholder="zpiz-…">
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="zpiz-…">
   </div>
+</header>
 
-  <div class="card">
-    <div id="drop">Povleci sem TIFF / PDF / PNG / ZIP ali klikni za izbiro<input id="files" type="file" multiple hidden accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg,.zip"></div>
-    <div class="row">
-      <button id="go" disabled>Obdelaj</button>
-      <span id="picked"></span>
-      <progress id="bar" hidden></progress>
-      <span id="status"></span>
-    </div>
+<section class="intake">
+  <label class="drop" id="drop">
+    <input id="files" type="file" multiple hidden accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg,.zip">
+    <div class="sample" aria-hidden="true"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i>6</i><i>7</i><i>8</i><i>9</i></div>
+    <h2>Povlecite skene sem</h2>
+    <p>Ali kliknite in izberite datoteke. Prebrani podatki se prikažejo ob skenu, negotova polja so označena z rumeno.</p>
+    <div class="formats">TIFF · PDF · PNG · JPG · ZIP</div>
+  </label>
+  <div class="how">
+    <div><b>En dokument</b>Stran 1 in stran 2 kot dve datoteki ali ena večstranska.</div>
+    <div><b>Več dokumentov</b>Strani se razvrstijo po imenu in razdelijo pri QR kodi na prvi strani.</div>
+    <div><b>Za preverbo</b>Rumeno je vse, kar je prebrano z manj kot 90 % zanesljivostjo.</div>
   </div>
+</section>
 
-  <div class="card" id="out" hidden>
-    <div class="row" style="margin:0 0 12px">
-      <button class="ghost" id="dl">Prenesi JSON</button>
-      <span id="summary" style="color:var(--muted)"></span>
+<section class="work">
+  <aside class="queue">
+    <div class="qhead">
+      <div class="count" id="count">0<small>dokumentov</small></div>
+      <div class="bar"><span id="bar"></span></div>
+      <div class="qstats" id="qstats"></div>
+      <div class="qactions">
+        <button class="btn primary" id="dl" disabled>Prenesi JSON</button>
+        <button class="btn" id="again">Nove datoteke</button>
+      </div>
     </div>
-    <div class="table-wrap"><table id="tbl"></table></div>
-  </div>
-</main>
+    <div class="list" id="list" role="listbox" aria-label="Dokumenti"></div>
+  </aside>
+  <main class="mirror" id="mirror"></main>
+  <aside class="scan">
+    <div class="tabs" id="tabs"></div>
+    <div class="view" id="view"></div>
+  </aside>
+</section>
+
 <script>
 const $ = id => document.getElementById(id);
-const COLS = ["pages","case_number","document_id","vk","other_country",
-  "amount1","currency1","country1","amount2","currency2","country2","amount3","currency3","country3",
-  "amount","currency","country","signature_present","notes"];
-let picked = [], results = [];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const CURRENCIES = ["EUR", "BAM", "HRK", "RSD", "MKD", "CHF", "AUD"];
+const COUNTRIES = ["D", "A", "I", "CH", "AUS", "HR", "BIH", "SRB", "MN", "MA"];
+const CHECK_BELOW = 0.9;
 
-try { $("key").value = localStorage.getItem("ld-key") || ""; } catch {}
-$("key").addEventListener("change", () => { try { localStorage.setItem("ld-key", $("key").value.trim()); } catch {} });
+let docs = [], sel = 0, page = 0, running = false;
+const sources = new Map();  // page name (as the API reports it) -> () => Promise<blob url | null>
+const rendered = new Map();
 
-const drop = $("drop");
-drop.onclick = () => $("files").click();
-drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
-drop.ondragleave = () => drop.classList.remove("over");
-drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); pick([...e.dataTransfer.files]); };
-$("files").onchange = e => pick([...e.target.files]);
-
-function pick(files) {
-  picked = files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  $("picked").textContent = files.length ? `${files.length} datotek` : "";
-  $("go").disabled = !files.length;
-}
+/* ---------- API key ---------- */
+const keyInput = $("key");
+try { keyInput.value = localStorage.getItem("ld-key") || ""; } catch {}
+const keyState = () => $("keydot").classList.toggle("on", !!keyInput.value.trim());
+keyInput.addEventListener("input", () => { keyState(); try { localStorage.setItem("ld-key", keyInput.value.trim()); } catch {} });
+keyState();
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + $("key").value.trim() } });
+  const r = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + keyInput.value.trim() } });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  if (r.status === 401) throw new Error("API ključ ni pravilen. Vpišite ga zgoraj desno.");
+  if (!r.ok) throw new Error(body.detail || `Strežnik je vrnil napako ${r.status}.`);
   return body;
 }
 
-$("go").onclick = async () => {
+/* ---------- intake ---------- */
+const drop = $("drop");
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); start([...e.dataTransfer.files]); });
+$("files").addEventListener("change", e => { start([...e.target.files]); e.target.value = ""; });
+$("again").addEventListener("click", () => { if (!running) { document.body.classList.remove("has-docs"); docs = []; } });
+
+const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+
+async function registerSources(files) {
+  sources.clear(); rendered.forEach(u => u && URL.revokeObjectURL(u)); rendered.clear();
+  for (const f of files) {
+    if (/\.zip$/i.test(f.name)) {
+      const zip = await JSZip.loadAsync(f);
+      for (const e of Object.values(zip.files)) {
+        if (e.dir || e.name.startsWith("__MACOSX/")) continue;
+        await registerFile(e.name, () => e.async("arraybuffer"));
+      }
+    } else {
+      await registerFile(f.name, () => f.arrayBuffer());
+    }
+  }
+}
+
+async function registerFile(name, load) {
+  if (/\.(tiff?)$/i.test(name)) {
+    const buf = await load();
+    const ifds = UTIF.decode(buf);
+    ifds.forEach((ifd, i) => sources.set(ifds.length > 1 ? `${name}#${i + 1}` : name, () => tiffToUrl(buf, ifd)));
+  } else if (/\.(png|jpe?g)$/i.test(name)) {
+    sources.set(name, async () => URL.createObjectURL(new Blob([await load()])));
+  } else {
+    sources.set(name, async () => null);  // PDF: no preview
+  }
+}
+
+async function tiffToUrl(buf, ifd) {
+  UTIF.decodeImage(buf, ifd);
+  const rgba = UTIF.toRGBA8(ifd);
+  const c = document.createElement("canvas");
+  c.width = ifd.width; c.height = ifd.height;
+  c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer), ifd.width, ifd.height), 0, 0);
+  return new Promise(res => c.toBlob(b => res(URL.createObjectURL(b)), "image/png"));
+}
+
+async function start(files) {
+  if (!files.length || running) return;
+  if (!keyInput.value.trim()) { keyInput.focus(); keyInput.placeholder = "najprej vpišite API ključ"; return; }
+  files.sort((a, b) => natural(a.name, b.name));
+  running = true;
+  document.body.classList.add("has-docs");
+  docs = [{ status: "pending", pages: files.map(f => f.name) }]; sel = 0; page = 0;
+  render();
+  registerSources(files).catch(() => {}).then(() => renderScan());
   const form = new FormData();
-  picked.forEach(f => form.append("files", f));
-  const batch = picked.length > 2 || picked.some(f => /\.zip$/i.test(f.name));
-  $("go").disabled = true; $("bar").hidden = false; $("bar").removeAttribute("value");
-  results = []; render();
+  files.forEach(f => form.append("files", f));
+  const batch = files.length > 2 || files.some(f => /\.zip$/i.test(f.name));
   try {
     if (!batch) {
-      $("status").textContent = "Berem dokument …";
-      results = [{ status: "done", ...await api("/v1/extract", { method: "POST", body: form }) }];
+      docs = [{ status: "done", ...await api("/v1/extract", { method: "POST", body: form }) }];
       render();
     } else {
-      $("status").textContent = "Nalagam …";
-      const { job_id, total } = await api("/v1/batch", { method: "POST", body: form });
-      $("bar").max = total;
+      const { job_id } = await api("/v1/batch", { method: "POST", body: form });
       for (;;) {
         const job = await api("/v1/batch/" + job_id);
-        $("bar").value = job.done;
-        $("status").textContent = `${job.done} / ${job.total} dokumentov`;
-        results = job.documents; render();
+        docs = job.documents; render();
         if (job.status !== "running") break;
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2500));
       }
     }
-    $("status").textContent = "Končano.";
   } catch (e) {
-    $("status").textContent = "Napaka: " + e.message;
+    docs = [{ status: "error", error: e.message, pages: files.map(f => f.name) }];
+    render();
   } finally {
-    $("go").disabled = false; $("bar").hidden = true;
+    running = false; render();
   }
-};
-
-function cell(v) {
-  if (v === null || v === undefined) return '<span class="null">—</span>';
-  if (Array.isArray(v)) return v.join(", ");
-  if (typeof v === "boolean") return v ? "da" : "ne";
-  return String(v).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
 
+/* ---------- reading the result ---------- */
+const conf = (d, k) => (d.confidence || {})[k];
+const needsCheck = (d, k) => (d.uncertain_fields || []).includes(k) || (typeof conf(d, k) === "number" && conf(d, k) < CHECK_BELOW);
+const checkCount = d => d.status === "done" ? Object.keys(d.confidence || {}).filter(k => needsCheck(d, k)).length : 0;
+
+function meter(d, k) {
+  const p = conf(d, k);
+  if (typeof p !== "number") return "";
+  return `<div class="conf" title="zanesljivost"><span class="m"><span style="width:${Math.round(p * 100)}%"></span></span>${Math.round(p * 100)} %</div>`;
+}
+
+function field(d, k, label, inner, cls = "") {
+  return `<div class="f ${needsCheck(d, k) ? "hl" : ""} ${cls}"><span class="l">${label}</span>${inner}${meter(d, k)}</div>`;
+}
+
+function text(v, pen = false) {
+  return v === null || v === undefined || v === ""
+    ? `<span class="v none">prazno</span>`
+    : `<span class="v ${pen ? "pen" : ""}">${esc(v)}</span>`;
+}
+
+function comb(v) {
+  let int = "", dec = "";
+  if (typeof v === "number") [int, dec] = v.toFixed(2).split(".");
+  const width = Math.max(6, Math.ceil(int.length / 3) * 3);
+  const digits = int.padStart(width, " ").split("");
+  let html = "";
+  digits.forEach((c, i) => {
+    if (i && (width - i) % 3 === 0) html += "<b>.</b>";
+    html += `<i>${c.trim()}</i>`;
+  });
+  html += "<b>,</b>" + (dec || "  ").split("").map(c => `<i>${c.trim()}</i>`).join("");
+  return `<span class="v"><span class="comb" aria-label="${typeof v === "number" ? v : "prazno"}">${html}</span></span>`;
+}
+
+function boxes(options, chosen) {
+  const list = chosen && !options.includes(chosen) ? [...options, chosen] : options;
+  return `<span class="v"><span class="boxes">${list.map(o => `<span class="box ${o === chosen ? "on" : ""}">${esc(o)}</span>`).join("")}</span></span>`;
+}
+
+function yesno(v) {
+  return `<span class="v"><span class="yesno"><span class="box ${v === true ? "on" : ""}">DA</span><span class="box ${v === false ? "on" : ""}">NE</span>${v === null ? '<span class="none" style="font-size:12px">ni označeno</span>' : ""}</span></span>`;
+}
+
+/* ---------- rendering ---------- */
 function render() {
-  $("out").hidden = !results.length;
-  const done = results.filter(d => d.status === "done");
-  const unsure = done.filter(d => d.uncertain_fields?.length).length;
-  $("summary").textContent = `${done.length} prebranih, ${unsure} za preverbo, ${results.filter(d => d.status === "error").length} napak`;
-  $("tbl").innerHTML = "<tr>" + COLS.map(c => `<th>${c}</th>`).join("") + "</tr>" + results.map(d => {
-    if (d.status === "error") return `<tr class="error"><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}">${cell(d.error)}</td></tr>`;
-    if (d.status === "pending") return `<tr><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}" class="null">čaka …</td></tr>`;
-    const unsureSet = new Set(d.uncertain_fields || []);
-    const conf = d.confidence || {};
-    return "<tr>" + COLS.map(c => {
-      const notes = c === "notes" ? [d.notes, ...(d.warnings || [])].filter(Boolean).join(" · ") : null;
-      const p = conf[c];
-      const unsure = unsureSet.has(c) || (typeof p === "number" && p < 0.9);
-      const title = typeof p === "number" ? ` title="zanesljivost ${Math.round(p * 100)} %"` : "";
-      return `<td${title} class="${unsure ? "unsure" : ""}${c === "notes" ? " notes" : ""}">${cell(c === "notes" ? notes || null : d[c])}</td>`;
-    }).join("") + "</tr>";
+  const done = docs.filter(d => d.status === "done");
+  const errors = docs.filter(d => d.status === "error").length;
+  const toCheck = done.filter(d => checkCount(d)).length;
+  const finished = done.length + errors;
+  $("count").innerHTML = `${docs.length}<small>${docs.length === 1 ? "dokument" : docs.length === 2 ? "dokumenta" : docs.length < 5 ? "dokumenti" : "dokumentov"}</small>`;
+  $("bar").style.width = docs.length ? `${(finished / docs.length) * 100}%` : "0";
+  $("qstats").innerHTML = `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${errors ? `<span><b>${errors}</b> napak</span>` : ""}`;
+  $("dl").disabled = !done.length || running;
+  $("list").innerHTML = docs.map((d, i) => {
+    const n = checkCount(d);
+    const tag = d.status === "pending" ? `<span class="tag wait">bere</span>`
+      : d.status === "error" ? `<span class="tag err">napaka</span>`
+      : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag clear">jasno</span>`;
+    const title = d.case_number || (d.status === "pending" ? "—" : "brez zadeve");
+    return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
+      <span class="case">${esc(title)}</span>${tag}<span class="pages">${esc((d.pages || []).join(" + "))}</span></button>`;
   }).join("");
+  renderMirror();
+  renderScan();
 }
 
-$("dl").onclick = () => {
-  const clean = results.filter(d => d.status === "done").map(({ status, ...d }) => d);
+$("list").addEventListener("click", e => {
+  const b = e.target.closest(".item");
+  if (b) select(+b.dataset.i);
+});
+
+function select(i) {
+  if (i < 0 || i >= docs.length) return;
+  sel = i; page = 0;
+  render();
+  $("list").querySelector(".sel")?.scrollIntoView({ block: "nearest" });
+}
+
+function renderMirror() {
+  const d = docs[sel];
+  const m = $("mirror");
+  if (!d) { m.innerHTML = ""; return; }
+  if (d.status === "pending") {
+    m.innerHTML = `<div class="sheet"><div class="sample" style="margin:24px auto;display:flex;justify-content:center" aria-hidden="true">${[1,2,3,4,5].map(n => `<i>${n}</i>`).join("")}</div><p style="text-align:center;color:var(--ink-2)">Berem kljukice, rokopis in QR kodo …</p></div>`;
+    return;
+  }
+  if (d.status === "error") {
+    m.innerHTML = `<div class="sheet"><div class="errorbox">${esc(d.error)}</div><div class="meta"><span>${esc((d.pages || []).join(" + "))}</span></div></div>`;
+    return;
+  }
+  const rows = [1, 2, 3].map(i => {
+    const keys = [`amount${i}`, `currency${i}`, `country${i}`];
+    if (keys.every(k => d[k] === null && !needsCheck(d, k))) {
+      const p = Math.min(...keys.map(k => conf(d, k) ?? 1));
+      return `<div class="row empty"><span class="n">${i}</span><span class="what">Vrstica je prazna</span>
+        <div class="conf"><span class="m"><span style="width:${Math.round(p * 100)}%"></span></span>${Math.round(p * 100)} %</div></div>`;
+    }
+    return `<div class="row"><span class="n">${i}</span>
+      <div class="pair">${field(d, `amount${i}`, "Znesek", comb(d[`amount${i}`]))}${field(d, `currency${i}`, "Valuta", boxes(CURRENCIES, d[`currency${i}`]))}</div>
+      ${field(d, `country${i}`, "Država", boxes(COUNTRIES, d[`country${i}`]))}</div>`;
+  }).join("");
+  const notes = [d.notes && `<p>${esc(d.notes)}</p>`, ...(d.warnings || []).map(w => `<p class="warn">${esc(w)}</p>`)].filter(Boolean).join("");
+  m.innerHTML = `<article class="sheet">
+    <div class="ids">
+      ${field(d, "case_number", "Zadeva", text(d.case_number))}
+      ${field(d, "document_id", "ID dokumenta · QR", text(d.document_id))}
+      ${field(d, "vk", "VK · QR", text(d.vk))}
+    </div>
+    <div class="sec"><h3>Stran 1 · Pokojnina iz druge države</h3>
+      ${field(d, "other_country", "Prejema pokojnino iz države, ki ni Slovenija", yesno(d.other_country))}
+    </div>
+    <div class="sec"><h3>Stran 1 · Zneski</h3>${rows}</div>
+    <div class="sec"><h3>Stran 2 · Država ni na seznamu</h3>
+      <div class="hand">
+        ${field(d, "amount", "Znesek", comb(d.amount))}
+        ${field(d, "currency", "Valuta", d.currency ? `<span class="v pen"><span class="line">${esc(d.currency)}</span></span>` : text(null))}
+        ${field(d, "country", "Država", d.country ? `<span class="v pen"><span class="line">${esc(d.country)}</span></span>` : text(null))}
+      </div>
+    </div>
+    <div class="sec"><h3>Stran 2 · Podpis</h3>
+      ${field(d, "signature_present", "Podpis upokojenca ali zakonitega zastopnika", `<span class="v"><span class="yesno"><span class="box ${d.signature_present ? "on" : ""}">podpisano</span>${d.signature_present === false ? '<span class="none" style="font-size:13px">polje je prazno</span>' : ""}</span></span>`)}
+    </div>
+    ${notes ? `<div class="notes">${notes}</div>` : ""}
+    <div class="meta"><span>${esc((d.pages || []).join(" + "))}</span><span>${esc(d.model || "")}</span></div>
+  </article>`;
+}
+
+let scanToken = 0;
+async function renderScan() {
+  const d = docs[sel];
+  const pages = d?.pages || [];
+  $("tabs").innerHTML = pages.slice(0, 2).map((p, i) => `<button class="tab ${i === page ? "on" : ""}" data-p="${i}">Stran ${i + 1}</button>`).join("")
+    + `<span class="hint"><kbd>j</kbd> <kbd>k</kbd> dokumenti · <kbd>1</kbd> <kbd>2</kbd> strani</span>`;
+  const name = pages[page];
+  const view = $("view");
+  const token = ++scanToken;
+  if (!name || !sources.has(name)) { view.innerHTML = `<div class="ph">${name ? "Predogled ni na voljo." : ""}</div>`; return; }
+  if (!rendered.has(name)) {
+    view.innerHTML = `<div class="ph">Pripravljam predogled …</div>`;
+    rendered.set(name, await sources.get(name)().catch(() => null));
+  }
+  if (token !== scanToken) return;
+  const url = rendered.get(name);
+  const zoomed = view.classList.contains("zoom");
+  view.innerHTML = url ? `<img src="${url}" alt="Sken: ${esc(name)}">` : `<div class="ph">Predogled ni na voljo za to datoteko.</div>`;
+  view.classList.toggle("zoom", zoomed);
+}
+
+$("tabs").addEventListener("click", e => {
+  const t = e.target.closest(".tab");
+  if (t) { page = +t.dataset.p; renderScan(); }
+});
+$("view").addEventListener("click", e => { if (e.target.tagName === "IMG") $("view").classList.toggle("zoom"); });
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea") || !document.body.classList.contains("has-docs")) return;
+  if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); select(sel + 1); }
+  if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); select(sel - 1); }
+  if (e.key === "1" || e.key === "2") { page = +e.key - 1; renderScan(); }
+});
+
+$("dl").addEventListener("click", () => {
+  const out = docs.filter(d => d.status === "done").map(({ status, ...d }) => d);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(clean, null, 2)], { type: "application/json" }));
-  a.download = "ld-rezultati.json"; a.click();
-};
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+  a.download = `ld-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+});
 </script>
 </body>
 </html>
