@@ -29,8 +29,18 @@ FIELDS = HEADER | P1 | P2
 SCHEMA = {
     "type": "object",
     "properties": {k: {"type": [t, "null"]} for k, t in FIELDS.items()}
-    | {"uncertain_fields": {"type": "array", "items": {"type": "string"}}, "notes": {"type": ["string", "null"]}},
-    "required": [*FIELDS, "uncertain_fields", "notes"],
+    | {
+        # How sure the model is of each value (including "this field is empty"), 0-1.
+        "confidence": {
+            "type": "object",
+            "properties": {k: {"type": "number", "minimum": 0, "maximum": 1} for k in FIELDS},
+            "required": [*FIELDS],
+            "additionalProperties": False,
+        },
+        "uncertain_fields": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": ["string", "null"]},
+    },
+    "required": [*FIELDS, "confidence", "uncertain_fields", "notes"],
     "additionalProperties": False,
 }
 
@@ -132,11 +142,15 @@ async def extract(doc: Document, batch: bool = False) -> dict:
         warnings.append("page 2 is missing: amount, currency, country and signature_present are null")
     if len(doc.pages) > 2:
         warnings.append(f"{len(doc.pages)} pages, only the first two were read")
+    conf = raw.get("confidence") or {}
+    conf = {k: round(min(max(float(conf[k]), 0.0), 1.0), 2) if isinstance(conf.get(k), (int, float)) else None for k in FIELDS}
+    qr_conf = 1.0 if qr else None  # read from the QR code, not guessed
     return {
         "case_number": data.pop("case_number"),
         "document_id": qr.get("document_id"),
         "vk": qr.get("vk"),
         **data,
+        "confidence": {"case_number": conf.pop("case_number"), "document_id": qr_conf, "vk": qr_conf, **conf},
         "uncertain_fields": [f for f in raw.get("uncertain_fields") or [] if f in FIELDS],
         "notes": raw.get("notes"),
         "warnings": warnings,

@@ -27,3 +27,11 @@ The layout is always the same. Read ./p1.png (page 1) and, if it exists, ./p2.pn
 ## Doubt
 Give your best reading for every field. Put the name of every field you are not sure about (a hard-to-read digit, an unclear mark) in `uncertain_fields`, with a short reason in `notes`.
 Do not invent values for empty fields.
+
+`confidence` gives, for every field, the probability (0 to 1) that your value is exactly right. A null value counts too: it is right if the field really is empty or unmarked.
+Use the scale like this:
+- 0.99: printed text, a clear X, or clearly empty boxes.
+- 0.9–0.97: clear handwriting.
+- 0.6–0.85: one character or mark could be read another way.
+- below 0.5: mostly a guess.
+Every field in `uncertain_fields` must have a confidence below 0.9.
