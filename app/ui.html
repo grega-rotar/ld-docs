@@ -264,6 +264,19 @@ body.working .work { display: grid; }
 .steps li.now { color: var(--ink); font-weight: 600; }
 .steps li.now::before { border-color: var(--pen); border-top-color: transparent; animation: spin .8s linear infinite; }
 .steps li.done { color: var(--ink-2); }
+.steps li.skip { display: none; }
+.fp { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; font: 500 12px var(--mono); color: var(--pen); font-variant-numeric: tabular-nums; }
+.fp i { display: block; width: 90px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.fp i b { display: block; height: 100%; width: 0; background: var(--pen); transition: width .35s var(--ease); }
+.qnote { margin: 0; padding: 12px 14px; background: var(--bed); border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
+.qnote b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.big { height: 8px; border-radius: 5px; background: var(--bed); overflow: hidden; position: relative; }
+.big b { display: block; height: 100%; width: 0; background: var(--pen); border-radius: 5px; transition: width .3s var(--ease); }
+.big::after { content: ""; position: absolute; inset: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: sweep 1.3s linear infinite; }
+.phase p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.readhead .t2 { font: 500 14px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tag.wait.q::before { animation: none; width: 7px; height: 7px; border: 0; background: var(--dot); }
+.eta { color: var(--pen); }
 .steps li.done::before { border-color: var(--ok); background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") center/12px no-repeat; }
 .readhead { display: flex; align-items: baseline; justify-content: space-between; }
 .readhead strong { font: 700 20px var(--display); font-stretch: 108%; }
@@ -440,7 +453,20 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;"
 const CURRENCIES = ["EUR", "BAM", "HRK", "RSD", "MKD", "CHF", "AUD"];
 const COUNTRIES = ["D", "A", "I", "CH", "AUS", "HR", "BIH", "SRB", "MN", "MA"];
 const CHECK_BELOW = 0.9;
-const STEPS = ["Iščem QR kodo in številko zadeve", "Berem kljukice", "Berem rokopis", "Ocenjujem zanesljivost polj"];
+// The real stages the server reports for a document (GET /v1/batch/{id}), in order.
+const STAGES = [
+  ["queued", "Čaka na prosto mesto"],
+  ["preparing", "Pripravljam sliki strani"],
+  ["starting", "Zaganjam branje"],
+  ["page1", "Claude bere stran 1"],
+  ["page2", "Claude bere stran 2"],
+  ["thinking", "Claude primerja polja s skenom"],
+  ["writing", "Claude zapisuje polja"],
+];
+const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "zaganja", retrying: "ponovno", page1: "stran 1", page2: "stran 2", thinking: "primerja", writing: "zapisuje" };
+const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing"]);
+const MB = b => nf(b / 1048576, 1);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const nf = (v, d = 0) => v.toLocaleString("sl-SI", { minimumFractionDigits: d, maximumFractionDigits: d });
 const secs = ms => ms >= 60000 ? `${Math.floor(ms / 60000)} min ${nf((ms % 60000) / 1000)} s` : `${nf(ms / 1000, 1)} s`;
 const usd = v => v < 0.01 ? `${nf(v, 4)} $` : `${nf(v, 3)} $`;
@@ -449,10 +475,11 @@ const tokens = u => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_re
 $("origin").textContent = location.origin.startsWith("http") ? location.origin : "https://ld-docs.etiam.si";
 
 let docs = [], sel = 0, page = 0, running = false, session = 0, startedAt = 0, finishedAt = 0;
+let phase = "upload", up = { sent: 0, total: 0 }, splitting = { done: 0, total: 0 }, parallel = 6, follow = true;
 const sources = new Map();   // page name (as the API reports it) -> () => Promise<blob url | null>
 const rendered = new Map();
 const revealed = new Set();  // documents whose fields already animated in
-let lastList = "", lastMirror = "", lastScan = "", stepTimer = 0;
+let lastMirror = "", lastScan = "";
 
 /* ---------- API key ---------- */
 const keyInput = $("key");
@@ -477,7 +504,7 @@ function transition(fn) {
 function goHome() {
   transition(() => {
     session++;  // a running batch keeps going on the server; this page just stops following it
-    running = false; docs = []; lastList = lastMirror = lastScan = "";
+    running = false; docs = []; lastMirror = lastScan = "";
     document.body.classList.remove("working");
     $("intake").classList.remove("screen-enter"); void $("intake").offsetWidth; $("intake").classList.add("screen-enter");
     window.scrollTo(0, 0);
@@ -533,14 +560,33 @@ async function tiffToUrl(buf, ifd) {
   return new Promise(res => c.toBlob(b => res(URL.createObjectURL(b)), "image/png"));
 }
 
+function upload(path, form, onProgress) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", path);
+    x.setRequestHeader("Authorization", "Bearer " + keyInput.value.trim());
+    x.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded, e.total);
+    x.onload = () => {
+      let body = {};
+      try { body = JSON.parse(x.responseText); } catch {}
+      if (x.status === 401) reject(new Error("API ključ ni pravilen. Vpišite ga zgoraj desno."));
+      else if (x.status >= 400) reject(new Error(body.detail || `Strežnik je vrnil napako ${x.status}. Poskusite znova čez minuto.`));
+      else resolve(body);
+    };
+    x.onerror = () => reject(new Error("Povezave s strežnikom ni bilo mogoče vzpostaviti. Preverite internet in poskusite znova."));
+    x.send(form);
+  });
+}
+
 async function start(files) {
   if (!files.length || running) return;
   if (!keyInput.value.trim()) { keyInput.focus(); keyInput.placeholder = "najprej vpišite API ključ"; return; }
   files.sort((a, b) => natural(a.name, b.name));
   const mine = ++session;
   running = true; startedAt = performance.now(); finishedAt = 0;
-  docs = [{ status: "pending", pages: files.map(f => f.name) }]; sel = 0; page = 0;
-  revealed.clear(); lastList = lastMirror = lastScan = "";
+  phase = "upload"; up = { sent: 0, total: files.reduce((n, f) => n + f.size, 0) }; splitting = { done: 0, total: 0 };
+  docs = []; sel = 0; page = 0; follow = true;
+  revealed.clear(); lastMirror = lastScan = ""; $("list").innerHTML = "";
   transition(() => {
     document.body.classList.add("working");
     $("work").classList.remove("screen-enter"); void $("work").offsetWidth; $("work").classList.add("screen-enter");
@@ -550,30 +596,37 @@ async function start(files) {
   registerSources(files).catch(() => {}).then(() => { lastScan = ""; renderScan(); });
   const form = new FormData();
   files.forEach(f => form.append("files", f));
-  const batch = files.length > 2 || files.some(f => /\.zip$/i.test(f.name));
   try {
-    if (!batch) {
-      const result = await api("/v1/extract", { method: "POST", body: form });
+    const { job_id } = await upload("/v1/batch", form, (sent, total) => {
+      if (mine === session) { up = { sent, total }; render(); }
+    });
+    if (mine !== session) return;
+    phase = "split"; render();
+    for (;;) {
+      const job = await api("/v1/batch/" + job_id);
       if (mine !== session) return;
-      docs = [{ status: "done", ...result }];
+      parallel = job.parallel || parallel;
+      if (job.status === "error") throw new Error(job.error);
+      if (job.status === "splitting") splitting = job.split || splitting;
+      else { phase = "read"; docs = job.documents; if (follow) followActive(); }
       render();
-    } else {
-      const { job_id } = await api("/v1/batch", { method: "POST", body: form });
-      for (;;) {
-        if (mine !== session) return;
-        const job = await api("/v1/batch/" + job_id);
-        if (mine !== session) return;
-        docs = job.documents; render();
-        if (job.status !== "running") break;
-        await new Promise(r => setTimeout(r, 2000));
-      }
+      if (job.status !== "splitting" && job.status !== "running") break;
+      await sleep(job.status === "splitting" ? 300 : 700);
     }
   } catch (e) {
     if (mine !== session) return;
-    docs = [{ status: "error", error: e.message, pages: files.map(f => f.name) }];
+    phase = "read";
+    docs = [{ status: "error", error: e.message, pages: files.map(f => f.name) }]; sel = 0;
   } finally {
     if (mine === session) { running = false; finishedAt = performance.now(); render(); }
   }
+}
+
+// Until the user picks a document, show the one being read right now.
+function followActive() {
+  const active = docs.findIndex(d => d.status === "pending" && d.stage && d.stage !== "queued");
+  const next = active >= 0 ? active : docs.findIndex(d => d.status === "pending");
+  if (next >= 0 && next !== sel) { sel = next; page = 0; }
 }
 
 let ticking = false;
@@ -583,8 +636,8 @@ function tick() {
   const frame = () => {
     const ms = (finishedAt || performance.now()) - startedAt;
     $("timer").textContent = secs(ms);
-    const t = document.querySelector(".readhead .t");
-    if (t) t.textContent = secs(ms);
+    const t = document.querySelector(".readhead .t[data-since]");
+    if (t) t.textContent = t.dataset.since ? secs(Math.max(0, Date.now() - t.dataset.since * 1000)) : "";
     if (running && document.body.classList.contains("working")) requestAnimationFrame(frame);
     else ticking = false;
   };
@@ -646,33 +699,56 @@ function render() {
   const errors = docs.filter(d => d.status === "error").length;
   const toCheck = done.filter(d => checkCount(d)).length;
   const finished = done.length + errors;
-  $("count").textContent = docs.length;
-  $("countword").textContent = docs.length === 1 ? "dokument" : docs.length === 2 ? "dokumenta" : docs.length < 5 ? "dokumenti" : "dokumentov";
-  $("bar").style.width = docs.length ? `${Math.max(finished ? 0 : 6, (finished / docs.length) * 100)}%` : "0";
+  const before = phase === "upload" || phase === "split";
+  $("count").textContent = before ? "…" : docs.length;
+  $("countword").textContent = phase === "upload" ? "nalagam" : phase === "split" ? "delim strani"
+    : docs.length === 1 ? "dokument" : docs.length === 2 ? "dokumenta" : docs.length < 5 ? "dokumenti" : "dokumentov";
+  const pct = phase === "upload" ? (up.total ? up.sent / up.total : 0) * 15
+    : phase === "split" ? 15 + (splitting.total ? splitting.done / splitting.total : 0) * 10
+    : 25 + (docs.length ? finished / docs.length : 0) * 75;
+  $("bar").style.width = `${running ? pct : docs.length ? 100 : 0}%`;
   $("barwrap").classList.toggle("live", running);
-  $("qstats").innerHTML = `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${errors ? `<span><b>${errors}</b> napak</span>` : ""}`;
-  const sum = k => done.reduce((s, d) => s + ((d.usage || {})[k] || 0), 0);
-  const tok = done.reduce((s, d) => s + tokens(d.usage || {}), 0);
+  const sum = k => done.reduce((n, d) => n + ((d.usage || {})[k] || 0), 0);
+  let eta = "";
+  if (running && phase === "read" && done.length) {
+    const left = docs.length - finished;
+    eta = left ? `<span class="eta">še ~${secs(Math.ceil(left / parallel) * sum("duration_ms") / done.length)}</span>` : "";
+  }
+  $("qstats").innerHTML = before ? `<span>${phase === "upload" ? `${MB(up.sent)} / ${MB(up.total)} MB` : `${splitting.done} / ${splitting.total || "…"} strani`}</span>`
+    : `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${errors ? `<span><b>${errors}</b> napak</span>` : ""}${eta}`;
+  const tok = done.reduce((n, d) => n + tokens(d.usage || {}), 0);
   $("totals").innerHTML = `<div><b>${done.length ? secs(sum("duration_ms") / done.length) : "–"}</b><span>na dokument</span></div>`
     + `<div><b>${done.length ? nf(tok) : "–"}</b><span>žetonov</span></div>`
     + `<div><b>${done.length ? usd(sum("cost_usd")) : "–"}</b><span>po ceni API</span></div>`;
   $("dl").disabled = !done.length || running;
-
-  const prev = new Map([...$("list").querySelectorAll(".item")].map(el => [el.dataset.k, el.dataset.s]));
-  const listHtml = docs.map((d, i) => {
-    const n = checkCount(d);
-    const tag = d.status === "pending" ? `<span class="tag wait">bere</span>`
-      : d.status === "error" ? `<span class="tag err">napaka</span>`
-      : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag clear">jasno</span>`;
-    const title = d.case_number || (d.status === "pending" ? "Berem …" : d.status === "error" ? "Ni prebrano" : "Brez zadeve");
-    const flash = prev.has(docKey(d)) && prev.get(docKey(d)) !== d.status ? "flash" : "";
-    return `<button class="item ${i === sel ? "sel" : ""} ${flash}" role="option" aria-selected="${i === sel}" data-i="${i}" data-k="${esc(docKey(d))}" data-s="${d.status}">
-      <span class="case">${esc(title)}</span>${tag}<span class="pages">${esc((d.pages || []).join(" + "))}</span></button>`;
-  }).join("");
-  const listSig = listHtml.replace(/ flash/g, "");
-  if (listSig !== lastList) { $("list").innerHTML = listHtml; lastList = listSig; }
+  renderList();
   renderMirror();
   renderScan();
+}
+
+function itemHtml(d, i) {
+  const n = checkCount(d);
+  const tag = d.status === "pending"
+    ? `<span class="tag wait ${d.stage === "queued" ? "q" : ""}">${SHORT[d.stage] || "bere"}${d.stage === "writing" && d.of ? ` ${d.fields}/${d.of}` : ""}</span>`
+    : d.status === "error" ? `<span class="tag err">napaka</span>`
+    : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag clear">jasno</span>`;
+  const title = d.case_number || (d.status === "pending" ? (d.stage === "queued" ? "V vrsti" : "Berem …") : d.status === "error" ? "Ni prebrano" : "Brez zadeve");
+  return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
+    <span class="case">${esc(title)}</span>${tag}<span class="pages">${esc((d.pages || []).join(" + "))}</span></button>`;
+}
+
+// Replace only the rows that changed, so spinners and hover states don't restart on every poll.
+function renderList() {
+  const list = $("list");
+  if (list.children.length !== docs.length) list.innerHTML = docs.map((d, i) => `<div data-sig="">${itemHtml(d, i)}</div>`).join("");
+  docs.forEach((d, i) => {
+    const row = list.children[i];
+    const html = itemHtml(d, i);
+    if (row.dataset.sig === html) return;
+    const wasPending = row.dataset.status === "pending";
+    row.innerHTML = html; row.dataset.sig = html; row.dataset.status = d.status;
+    if (wasPending && d.status !== "pending" && i !== sel) row.firstElementChild.classList.add("flash");
+  });
 }
 
 $("list").addEventListener("click", e => {
@@ -682,33 +758,72 @@ $("list").addEventListener("click", e => {
 
 function select(i) {
   if (i < 0 || i >= docs.length || i === sel) return;
+  follow = false;
   transition(() => { sel = i; page = 0; render(); });
   requestAnimationFrame(() => $("list").querySelector(".sel")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
 }
 
-function renderMirror() {
-  const d = docs[sel];
-  const sig = sel + JSON.stringify(d || null);
-  if (sig === lastMirror) return;
-  lastMirror = sig;
-  clearInterval(stepTimer);
+function panel(title, right, pct, note) {
   const m = $("mirror");
-  if (!d) { m.innerHTML = ""; return; }
-  if (d.status === "pending") {
+  if (m.dataset.view !== "panel:" + title) {
+    m.dataset.view = "panel:" + title;
+    m.innerHTML = `<div class="sheet reading phase"><div class="readhead"><strong>${title}</strong><span class="t2"></span></div><div class="big"><b></b></div><p></p></div>`;
+  }
+  m.querySelector(".t2").textContent = right;
+  m.querySelector(".big b").style.width = `${Math.round(pct * 100)}%`;
+  m.querySelector("p").textContent = note;
+}
+
+function reading(d) {
+  const m = $("mirror");
+  const key = "reading:" + docKey(d);
+  if (m.dataset.view !== key) {
+    m.dataset.view = key;
     m.innerHTML = `<div class="sheet reading">
-      <div class="readhead"><strong>Berem dokument</strong><span class="t"></span></div>
-      <ul class="steps">${STEPS.map((s, i) => `<li class="${i ? "" : "now"}">${s}</li>`).join("")}</ul>
+      <div class="readhead"><strong>Berem dokument</strong><span class="t" data-since=""></span></div>
+      <ul class="steps">${STAGES.map(([k, label]) => `<li data-k="${k}">${label}</li>`).join("")}</ul>
+      <p class="qnote" hidden></p>
       <div class="skel"><span></span><span></span><span></span><span></span><span></span></div>
     </div>`;
-    let step = 0;
-    stepTimer = setInterval(() => {
-      const li = m.querySelectorAll(".steps li");
-      if (!li.length || step >= li.length - 1) return clearInterval(stepTimer);
-      li[step].className = "done"; li[++step].className = "now";
-    }, 3200);
-    tick();
-    return;
   }
+  const stage = d.stage === "retrying" ? "starting" : d.stage || "queued";
+  const now = STAGES.findIndex(([k]) => k === stage);
+  m.querySelectorAll(".steps li").forEach((li, i) => {
+    const k = li.dataset.k;
+    li.className = k === "page2" && (d.pages || []).length < 2 ? "skip" : i < now ? "done" : i === now ? "now" : "";
+    if (k === "writing") {
+      const w = stage === "writing" && d.of ? d.fields / d.of : 0;
+      li.innerHTML = `${STAGES[i][1]}${stage === "writing" ? ` <span class="fp"><i><b style="width:${Math.round(w * 100)}%"></b></i>${d.fields || 0} / ${d.of}</span>` : ""}`;
+    }
+    if (k === "starting" && d.stage === "retrying") li.textContent = "Ponovno zaganjam branje";
+  });
+  const t = m.querySelector(".readhead .t");
+  t.dataset.since = d.started_at || "";
+  if (!d.started_at) t.textContent = "";
+  const q = m.querySelector(".qnote");
+  const ahead = docs.slice(0, docs.indexOf(d)).filter(x => x.status === "pending" && x.stage === "queued").length;
+  q.hidden = stage !== "queued";
+  q.innerHTML = `Naenkrat se bere <b>${parallel}</b> dokumentov. Pred tem jih čaka še <b>${ahead}</b>.`;
+  tick();
+}
+
+function renderMirror() {
+  const m = $("mirror");
+  if (running && phase === "upload") {
+    return panel("Nalagam datoteke", `${MB(up.sent)} / ${MB(up.total)} MB`, up.total ? up.sent / up.total : 0,
+      "Skeni potujejo na strežnik. Ko so naloženi, jih razdelimo na dokumente.");
+  }
+  if (running && phase === "split") {
+    return panel("Delim strani po QR kodi", `${splitting.done} / ${splitting.total || "…"} strani`, splitting.total ? splitting.done / splitting.total : 0,
+      "Vsaka prva stran ima QR kodo. Tam se začne nov dokument; naslednja stran brez nje je njegova druga stran.");
+  }
+  const d = docs[sel];
+  if (!d) { m.dataset.view = ""; m.innerHTML = ""; return; }
+  if (d.status === "pending") return reading(d);
+  const sig = sel + JSON.stringify(d);
+  if (sig === lastMirror && m.dataset.view === "doc") return;
+  lastMirror = sig;
+  m.dataset.view = "doc";
   if (d.status === "error") {
     m.innerHTML = `<div class="sheet"><div class="errorbox">${esc(d.error)}</div><div class="meta"><span>${esc((d.pages || []).join(" + "))}</span></div></div>`;
     return;
@@ -763,8 +878,9 @@ let scanToken = 0;
 async function renderScan() {
   const d = docs[sel];
   const pages = d?.pages || [];
+  if (follow && d?.status === "pending" && (d.stage === "page1" || d.stage === "page2")) page = d.stage === "page2" ? 1 : 0;
   const name = pages[page];
-  const pending = d?.status === "pending";
+  const pending = d?.status === "pending" && READING.has(d.stage);
   const sig = `${sel}|${page}|${name}|${pending}|${sources.has(name)}`;
   if (sig === lastScan) return;
   lastScan = sig;

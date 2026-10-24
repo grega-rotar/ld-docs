@@ -1,6 +1,7 @@
 """Pairing, parsing and the HTTP layer, with claude stubbed out (the real reading is checked with scripts/run_local.py)."""
 import io
 import json
+import time
 import zipfile
 
 import pytest
@@ -67,8 +68,11 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "JOBS_DIR", tmp_path)
     monkeypatch.setattr("app.pages.read_qr", lambda im: None)
 
-    async def fake_claude(workdir, files):
+    async def fake_claude(workdir, files, progress=ex.no_progress):
         assert files == ["p1.png", "p2.png"][: len(files)]
+        for stage in ("starting", "page1", "page2", "thinking"):
+            progress(stage)
+        progress("writing", fields=3, of=len(ex.FIELDS))
         return {k: None for k in ex.FIELDS} | {"case_number": "10344-1/2023", "amount": 2500.5, "uncertain_fields": ["amount", "bogus"],
                                               "confidence": {k: 0.99 for k in ex.FIELDS} | {"amount": 0.7, "currency": 1.5}}, "m", \
             {"input_tokens": 10, "output_tokens": 5, "cache_read_tokens": 0, "cache_write_tokens": 1500, "cost_usd": 0.006}
@@ -104,18 +108,34 @@ def test_extract_one_rejects_many(client):
     assert r.status_code == 400 and "/v1/batch" in r.json()["detail"]
 
 
+def poll(client, job_id):
+    for _ in range(200):
+        job = client.get(f"/v1/batch/{job_id}", headers={"Authorization": "Bearer k"}).json()
+        if job["status"] not in ("splitting", "running"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError(f"job still {job['status']}")
+
+
+def test_batch_bad_upload(client):
+    with client:
+        r = client.post("/v1/batch", headers={"Authorization": "Bearer k"}, files={"files": ("notes.txt", b"hello")})
+        assert r.status_code == 202
+        job = poll(client, r.json()["job_id"])
+    assert job["status"] == "error" and "notes.txt" in job["error"]
+
+
 def test_batch(client):
     with client:
         r = client.post("/v1/batch", headers={"Authorization": "Bearer k"}, files={"files": ("all.tif", tif(4))})
         assert r.status_code == 202
         job_id = r.json()["job_id"]
-        for _ in range(50):
-            job = client.get(f"/v1/batch/{job_id}", headers={"Authorization": "Bearer k"}).json()
-            if job["status"] == "done":
-                break
+        assert r.json()["status"] == "splitting"
+        job = poll(client, job_id)
     assert job["total"] == job["done"] == 2
     assert [d["pages"] for d in job["documents"]] == [["all.tif#1", "all.tif#2"], ["all.tif#3", "all.tif#4"]]
-    assert all(d["status"] == "done" for d in job["documents"])
+    assert all(d["status"] == "done" and "stage" not in d for d in job["documents"])
+    assert job["split"] == {"done": 4, "total": 4} and job["parallel"] >= 1
     assert client.get("/v1/batch/nope", headers={"Authorization": "Bearer k"}).status_code == 404
     assert json.loads(next(main.JOBS_DIR.glob("*.json")).read_text())["status"] == "done"
 

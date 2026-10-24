@@ -79,11 +79,12 @@ def read_qr(image: Image.Image) -> dict | None:
     return None
 
 
-def group(pages: list[Page]) -> list[Document]:
+def group(pages: list[Page], progress=lambda done, total: None) -> list[Document]:
     """A QR page starts a document. Without QR codes (bad scan) it falls back to pairs: odd page 1, even page 2."""
     docs: list[Document] = []
-    for p in pages:
+    for i, p in enumerate(pages):
         p.qr = read_qr(p.image)
+        progress(i + 1, len(pages))
         if p.qr or not docs or len(docs[-1].pages) >= 2:
             docs.append(Document())
         docs[-1].pages.append(p)
