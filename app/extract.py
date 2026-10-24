@@ -47,7 +47,8 @@ SCHEMA = {
 
 # Batches share MAX_PARALLEL claude runs; single calls have their own slots, so they never queue behind a batch
 # (Cloudflare drops a request after ~100 s of silence).
-BATCH_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL", "4")))
+BATCH_PARALLEL = int(os.environ.get("MAX_PARALLEL", "6"))
+BATCH_SLOTS = asyncio.Semaphore(BATCH_PARALLEL)
 SINGLE_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL_SINGLE", "4")))
 
 
@@ -95,11 +96,18 @@ def usage_of(out: dict) -> dict:
     }
 
 
-async def run_claude(workdir: str, files: list[str]) -> tuple[dict, str, dict]:
+def no_progress(stage: str, **info):
+    pass
+
+
+async def run_claude(workdir: str, files: list[str], progress=no_progress) -> tuple[dict, str, dict]:
+    """One streamed claude run. progress(stage, **info) hears what it really does:
+    starting -> page1 -> page2 -> thinking -> writing (fields=n, of=total)."""
     # Our prompt replaces Claude Code's own system prompt, and no settings, skills or plugins load:
     # that cuts the fixed overhead of a run from ~32k to ~1.5k tokens.
     args = [
-        claude_bin(), "-p", "--output-format", "json", "--json-schema", json.dumps(SCHEMA),
+        claude_bin(), "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+        "--json-schema", json.dumps(SCHEMA),
         "--model", MODEL, "--no-session-persistence", "--strict-mcp-config", "--max-turns", "6",
         "--system-prompt", PROMPT, "--disable-slash-commands", "--setting-sources", "",
         "--tools", "Read", "--allowedTools", ",".join(f"Read(./{f})" for f in files),
@@ -107,24 +115,60 @@ async def run_claude(workdir: str, files: list[str]) -> tuple[dict, str, dict]:
     ]  # fmt: skip
     task = f"Read {' and '.join(f'./{f}' for f in files)}, then answer in the schema."
     env = {**os.environ, "CLAUDE_POOL_FRESH": "0"}
+    progress("starting")
     proc = await asyncio.create_subprocess_exec(
-        *args, cwd=workdir, env=env,
+        *args, cwd=workdir, env=env, limit=64 * 1024 * 1024,  # tool results carry the page images as base64
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )  # fmt: skip
+    proc.stdin.write(task.encode())
+    proc.stdin.close()
+
+    async def follow() -> dict | None:
+        result, answer = None, None
+        async for line in proc.stdout:
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            kind = e.get("type")
+            if kind == "assistant":
+                for c in e.get("message", {}).get("content", []):
+                    page = str((c.get("input") or {}).get("file_path", ""))
+                    if c.get("type") == "tool_use" and c.get("name") == "Read" and page.endswith(tuple(files)):
+                        progress(f"page{page[-5]}")  # ./p1.png -> page1
+            elif kind == "stream_event":
+                ev = e.get("event", {})
+                block = ev.get("content_block") or {}
+                delta = ev.get("delta") or {}
+                if block.get("type") == "thinking":
+                    progress("thinking")
+                elif block.get("type") == "tool_use" and block.get("name") == "StructuredOutput":
+                    answer = ""
+                    progress("writing", fields=0, of=len(FIELDS))
+                elif delta.get("type") == "input_json_delta" and answer is not None:
+                    before = answer.count('":')
+                    answer += delta.get("partial_json", "")
+                    if answer.count('":') != before:
+                        done = sum(f'"{k}":' in answer for k in FIELDS)
+                        progress("writing", fields=done, of=len(FIELDS))
+            elif kind == "result":
+                result = e
+        return result
+
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(task.encode()), TIMEOUT)
+        out = await asyncio.wait_for(follow(), TIMEOUT)
+        await asyncio.wait_for(proc.wait(), 10)
     except TimeoutError:
         proc.kill()
         await proc.wait()
         raise ExtractError(f"claude did not answer within {TIMEOUT} s") from None
+    stderr = (await proc.stderr.read()).decode(errors="replace")
     if proc.returncode == EXIT_EXHAUSTED:
         raise ExtractError("every claude-pool account is at its usage limit, try again later", exhausted=True)
-    try:
-        out = json.loads(stdout)
-    except json.JSONDecodeError:
-        raise ExtractError(f"claude exit {proc.returncode}: {(stderr or stdout).decode()[-300:]}") from None
+    if not out:
+        raise ExtractError(f"claude exit {proc.returncode}: {stderr[-300:]}")
     if out.get("is_error") or proc.returncode or not isinstance(out.get("structured_output"), dict):
-        why = out.get("result") or out.get("errors") or stderr.decode()[-300:]
+        why = out.get("result") or out.get("errors") or stderr[-300:]
         raise ExtractError(f"claude error ({out.get('subtype')}, exit {proc.returncode}): {str(why)[:300]}")
     model = next(iter(out.get("modelUsage") or {}), MODEL)
     return out["structured_output"], model, usage_of(out)
@@ -140,18 +184,20 @@ def write_pngs(doc: Document, tmp: str) -> list[str]:
     return files
 
 
-async def extract(doc: Document, batch: bool = False) -> dict:
+async def extract(doc: Document, batch: bool = False, progress=no_progress) -> dict:
     """The flat result: link to the case first, then ZPIZ's 14 fields, then what to double-check."""
     async with BATCH_SLOTS if batch else SINGLE_SLOTS:
         started = time.monotonic()  # after the queue: this is how long reading took, not waiting
+        progress("preparing")
         with tempfile.TemporaryDirectory(prefix="ld-") as tmp:
             files = await asyncio.to_thread(write_pngs, doc, tmp)
             try:
-                raw, model, usage = await run_claude(tmp, files)
+                raw, model, usage = await run_claude(tmp, files, progress)
             except ExtractError as e:
                 if e.exhausted:
                     raise
-                raw, model, usage = await run_claude(tmp, files)  # one retry: runs that start together sometimes fail
+                progress("retrying")
+                raw, model, usage = await run_claude(tmp, files, progress)  # runs that start together sometimes fail
         usage = {"duration_ms": round((time.monotonic() - started) * 1000), **usage}
     data = clean(raw)
     qr = doc.qr or {}
