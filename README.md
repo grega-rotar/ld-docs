@@ -1,6 +1,6 @@
 # ld-docs
 
-API at **https://id-docs.etiam.si** that reads ZPIZ "Izjava o višini tuje pokojnine" (LD) forms and returns the JSON ZPIZ asked for (`LDDokumentP1` + `LDDokumentP2`), linked to the case.
+API at **https://ld-docs.etiam.si** that reads ZPIZ "Izjava o višini tuje pokojnine" (LD) forms and returns the JSON ZPIZ asked for (`LDDokumentP1` + `LDDokumentP2`), linked to the case.
 
 - Page 1 is recognised by its ZPIZ QR code. The code gives `document_id` and `vk` exactly; they are not OCR guesses.
 - Claude (through claude-pool) reads the case number, the ticked boxes and the handwriting. Each document is one locked-down `claude -p` run: it may only `Read` its two page images, and it has to answer in a JSON schema (`app/extract.py`, prompt in `app/prompt.md`).
@@ -16,7 +16,7 @@ Send page 1 and page 2 as two files, or one multi-page TIFF/PDF. TIFF, PNG, JPEG
 ```bash
 curl -H "Authorization: Bearer $KEY" \
   -F files=@00000001.tif -F files=@00000002.tif \
-  https://id-docs.etiam.si/v1/extract
+  https://ld-docs.etiam.si/v1/extract
 ```
 
 ```json
@@ -62,9 +62,9 @@ Pages are split into documents at each QR code, so a missing page 2 doesn't shif
 If a QR code can't be read, it falls back to odd = page 1 and even = page 2.
 
 ```bash
-curl -H "Authorization: Bearer $KEY" -F files=@ld_test.zip https://id-docs.etiam.si/v1/batch
+curl -H "Authorization: Bearer $KEY" -F files=@ld_test.zip https://ld-docs.etiam.si/v1/batch
 # {"job_id": "3f2a…", "status": "running", "total": 51}
-curl -H "Authorization: Bearer $KEY" https://id-docs.etiam.si/v1/batch/3f2a…
+curl -H "Authorization: Bearer $KEY" https://ld-docs.etiam.si/v1/batch/3f2a…
 # {"status": "running" | "done" | "interrupted", "done": 12, "total": 51,
 #  "documents": [{"status": "done", ...same fields as /v1/extract...}, {"status": "error", "error": "...", "pages": [...]}, ...]}
 ```
@@ -92,11 +92,11 @@ docker run --rm -v "$PWD:/src:ro" -w /src --entrypoint sh ld-docs:dev -c \
 `ld_test/` (ZPIZ's sample scans) holds personal data and is git-ignored. Never commit scans or results.
 
 ## Deploy
-Same setup as rokomet-stats: push to `main` → GitHub Actions runs the tests in the image → pushes `ghcr.io/grega-rotar/ld-docs:<sha>` → SSHes to t4a as `deploy` and runs `docker compose up -d` in `/srv/ld-docs` → waits for `https://id-docs.etiam.si/health`.
+Same setup as rokomet-stats: push to `main` → GitHub Actions runs the tests in the image → pushes `ghcr.io/grega-rotar/ld-docs:<sha>` → SSHes to t4a as `deploy` and runs `docker compose up -d` in `/srv/ld-docs` → waits for `https://ld-docs.etiam.si/health`.
 Rollback: run the workflow by hand with `tag=<older sha>`.
 
 One-time setup:
 1. Repo secrets `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` (the same values as rokomet-stats).
 2. On t4a: `/srv/ld-docs` (owner `deploy`) with `.env` (`API_KEYS=…`, mode 600) and `claude-pool/` (copy of `/srv/rokomet-stats/claude-pool`, mode 600, owner uid 1000).
 3. After the first image push: make the GHCR package `ld-docs` public (package settings), so t4a can pull without logging in.
-4. Cloudflare: `A id-docs.etiam.si → 77.42.42.60`, proxied. The `*.etiam.si` origin certificate on the edge Traefik already covers it.
+4. Cloudflare: `A ld-docs.etiam.si → 77.42.42.60`, proxied. The `*.etiam.si` origin certificate on the edge Traefik already covers it.

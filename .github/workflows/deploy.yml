@@ -14,7 +14,7 @@ on:
 
 env:
   IMAGE: ghcr.io/grega-rotar/ld-docs
-  HEALTH_URL: https://id-docs.etiam.si/health
+  HEALTH_URL: https://ld-docs.etiam.si/health
 
 jobs:
   check:
