@@ -70,7 +70,8 @@ def client(monkeypatch, tmp_path):
     async def fake_claude(workdir, files):
         assert files == ["p1.png", "p2.png"][: len(files)]
         return {k: None for k in ex.FIELDS} | {"case_number": "10344-1/2023", "amount": 2500.5, "uncertain_fields": ["amount", "bogus"],
-                                              "confidence": {k: 0.99 for k in ex.FIELDS} | {"amount": 0.7, "currency": 1.5}}, "m"
+                                              "confidence": {k: 0.99 for k in ex.FIELDS} | {"amount": 0.7, "currency": 1.5}}, "m", \
+            {"input_tokens": 10, "output_tokens": 5, "cache_read_tokens": 0, "cache_write_tokens": 1500, "cost_usd": 0.006}
 
     monkeypatch.setattr(ex, "run_claude", fake_claude)
     return TestClient(main.app)
@@ -91,6 +92,7 @@ def test_extract_one(client):
     assert body["pages"] == ["1.tif", "2.tif"]
     assert body["warnings"] == ["no QR code found on page 1: document_id and vk are missing"]
     assert list(body)[:3] == ["case_number", "document_id", "vk"]
+    assert body["usage"]["cost_usd"] == 0.006 and body["usage"]["duration_ms"] >= 0
     conf = body["confidence"]
     assert list(conf)[:3] == ["case_number", "document_id", "vk"] and len(conf) == len(ex.FIELDS) + 2
     assert (conf["amount"], conf["currency"], conf["document_id"]) == (0.7, 1.0, None)  # clamped; no QR -> None
@@ -121,3 +123,11 @@ def test_batch(client):
 def test_ui(client):
     r = client.get("/")
     assert r.status_code == 200 and "/v1/batch" in r.text
+
+
+def test_usage_of():
+    out = {"total_cost_usd": 0.0123456, "modelUsage": {
+        "a": {"inputTokens": 3, "outputTokens": 400, "cacheReadInputTokens": 1000, "cacheCreationInputTokens": 50},
+        "b": {"inputTokens": 1, "outputTokens": 2}}}
+    assert ex.usage_of(out) == {"input_tokens": 4, "output_tokens": 402, "cache_read_tokens": 1000,
+                                "cache_write_tokens": 50, "cost_usd": 0.01235}

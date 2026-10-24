@@ -25,7 +25,7 @@ The layout is always the same. Read ./p1.png (page 1) and, if it exists, ./p2.pn
 - If there is no page 2, all page 2 fields are null.
 
 ## Doubt
-Give your best reading for every field. Put the name of every field you are not sure about (a hard-to-read digit, an unclear mark) in `uncertain_fields`, with a short reason in `notes`.
+Give your best reading for every field. Put the name of every field you are not sure about (a hard-to-read digit, an unclear mark) in `uncertain_fields`, with a short reason in `notes`. Write `notes` in Slovenian, because ZPIZ clerks read them.
 Do not invent values for empty fields.
 
 `confidence` gives, for every field, the probability (0 to 1) that your value is exactly right. A null value counts too: it is right if the field really is empty or unmarked.
