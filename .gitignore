@@ -1,0 +1,6 @@
+# Test scans hold personal data: never commit them, nor results read from them.
+ld_test/
+results/
+__pycache__/
+.pytest_cache/
+.env

@@ -1,0 +1,7 @@
+ld_test
+results
+.git
+.github
+tests
+__pycache__
+.env
