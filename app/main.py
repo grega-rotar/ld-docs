@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .extract import ExtractError, extract
@@ -39,6 +39,12 @@ async def documents(files: list[UploadFile]):
     if not pages:
         raise HTTPException(400, "no pages in the upload")
     return await asyncio.to_thread(group, pages)
+
+
+@app.get("/", include_in_schema=False)
+def ui():
+    """Upload page; it calls the API below with the key the user types in."""
+    return FileResponse(Path(__file__).parent / "ui.html")
 
 
 @app.get("/health")
