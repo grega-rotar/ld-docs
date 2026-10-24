@@ -139,9 +139,13 @@ function render() {
     if (d.status === "error") return `<tr class="error"><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}">${cell(d.error)}</td></tr>`;
     if (d.status === "pending") return `<tr><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}" class="null">čaka …</td></tr>`;
     const unsureSet = new Set(d.uncertain_fields || []);
+    const conf = d.confidence || {};
     return "<tr>" + COLS.map(c => {
       const notes = c === "notes" ? [d.notes, ...(d.warnings || [])].filter(Boolean).join(" · ") : null;
-      return `<td class="${unsureSet.has(c) ? "unsure" : ""}${c === "notes" ? " notes" : ""}">${cell(c === "notes" ? notes || null : d[c])}</td>`;
+      const p = conf[c];
+      const unsure = unsureSet.has(c) || (typeof p === "number" && p < 0.9);
+      const title = typeof p === "number" ? ` title="zanesljivost ${Math.round(p * 100)} %"` : "";
+      return `<td${title} class="${unsure ? "unsure" : ""}${c === "notes" ? " notes" : ""}">${cell(c === "notes" ? notes || null : d[c])}</td>`;
     }).join("") + "</tr>";
   }).join("");
 }

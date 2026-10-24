@@ -32,6 +32,11 @@ curl -H "Authorization: Bearer $KEY" \
   "amount3": null, "currency3": null, "country3": null,
   "amount": 2500.0, "currency": "SEK", "country": "ŠVEDSKA",
   "signature_present": false,
+  "confidence": {
+    "case_number": 0.99, "document_id": 1.0, "vk": 1.0, "documentation_number": 0.99, "beneficiary_number": 0.99,
+    "other_country": 0.98, "amount1": 0.99, "currency1": 0.99, "country1": 0.99, "...": "...",
+    "amount": 0.7, "currency": 0.96, "country": 0.93, "signature_present": 0.97
+  },
   "uncertain_fields": ["amount"],
   "notes": "decimals are written as two open loops: read as 00, could be 02",
   "warnings": [],
@@ -46,6 +51,7 @@ curl -H "Authorization: Bearer $KEY" \
   - `currency` (page 2): the ISO code when the handwriting clearly means one (`SEK`), otherwise as written.
   - `country` (page 2): as written by hand (`ŠVEDSKA`).
   - `other_country`: `null` when neither yes nor no is ticked.
+- **`confidence`**: one number from 0 to 1 per field, the probability that the value (including `null`, meaning "empty") is exactly right. `document_id` and `vk` are 1.0 because they come from the QR code; they are `null` if there was no QR code. Every other number is Claude's own estimate, not a calibrated statistic. On the samples, clear print scored 0.98–0.99, clear handwriting 0.9–0.97, and ambiguous digits 0.5–0.85. A sensible rule: have a person check anything below 0.9.
 - **For a human to check:** `uncertain_fields` lists the fields the model wasn't sure about, and `notes` says why. `warnings` lists technical problems: no QR code, a missing page 2, more than 2 pages.
 
 Errors: `400` for a bad upload or more than one document (use the batch), `401` for a wrong key, `502` when Claude fails, `503` when every claude-pool account is at its usage limit.

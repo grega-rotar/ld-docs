@@ -69,7 +69,8 @@ def client(monkeypatch, tmp_path):
 
     async def fake_claude(workdir, files):
         assert files == ["p1.png", "p2.png"][: len(files)]
-        return {k: None for k in ex.FIELDS} | {"case_number": "10344-1/2023", "amount": 2500.5, "uncertain_fields": ["amount", "bogus"]}, "m"
+        return {k: None for k in ex.FIELDS} | {"case_number": "10344-1/2023", "amount": 2500.5, "uncertain_fields": ["amount", "bogus"],
+                                              "confidence": {k: 0.99 for k in ex.FIELDS} | {"amount": 0.7, "currency": 1.5}}, "m"
 
     monkeypatch.setattr(ex, "run_claude", fake_claude)
     return TestClient(main.app)
@@ -90,6 +91,9 @@ def test_extract_one(client):
     assert body["pages"] == ["1.tif", "2.tif"]
     assert body["warnings"] == ["no QR code found on page 1: document_id and vk are missing"]
     assert list(body)[:3] == ["case_number", "document_id", "vk"]
+    conf = body["confidence"]
+    assert list(conf)[:3] == ["case_number", "document_id", "vk"] and len(conf) == len(ex.FIELDS) + 2
+    assert (conf["amount"], conf["currency"], conf["document_id"]) == (0.7, 1.0, None)  # clamped; no QR -> None
 
 
 def test_extract_one_rejects_many(client):
