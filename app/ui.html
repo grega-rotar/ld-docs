@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LD dokumenti</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f24; --muted:#667085; --line:#e4e7ec; --accent:#2f5bea; --warn:#fff4d6; --warnfg:#8a5a00; --err:#fde8e8; --errfg:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1a1e24; --fg:#e6e8eb; --muted:#98a2b3; --line:#2b313a; --accent:#7c9bff; --warn:#3a2f12; --warnfg:#f5c451; --err:#3b1717; --errfg:#ff8a80; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1200px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { margin:0 0 20px; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { font-weight:600; display:block; margin-bottom:6px; }
+  input[type=password] { width:100%; max-width:420px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  #drop { border:2px dashed var(--line); border-radius:10px; padding:28px; text-align:center; color:var(--muted); cursor:pointer; }
+  #drop.over { border-color:var(--accent); color:var(--accent); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+  #status { color:var(--muted); }
+  .table-wrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--card); }
+  td.unsure { background:var(--warn); color:var(--warnfg); font-weight:600; }
+  tr.error td { background:var(--err); color:var(--errfg); }
+  td.notes { white-space:normal; min-width:260px; color:var(--muted); }
+  .null { color:var(--muted); opacity:.5; }
+  progress { width:240px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LD dokumenti</h1>
+  <p class="sub">Izjava o višini tuje pokojnine → JSON. 1–2 strani = en dokument; več strani ali ZIP = paketna obdelava (strani se razvrstijo po imenu, dokumenti se ločijo po QR kodi).</p>
+
+  <div class="card">
+    <label for="key">API ključ</label>
+    <input id="key" type="password" autocomplete="off" placeholder="zpiz-…">
+  </div>
+
+  <div class="card">
+    <div id="drop">Povleci sem TIFF / PDF / PNG / ZIP ali klikni za izbiro<input id="files" type="file" multiple hidden accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg,.zip"></div>
+    <div class="row">
+      <button id="go" disabled>Obdelaj</button>
+      <span id="picked"></span>
+      <progress id="bar" hidden></progress>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="card" id="out" hidden>
+    <div class="row" style="margin:0 0 12px">
+      <button class="ghost" id="dl">Prenesi JSON</button>
+      <span id="summary" style="color:var(--muted)"></span>
+    </div>
+    <div class="table-wrap"><table id="tbl"></table></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const COLS = ["pages","case_number","document_id","vk","other_country",
+  "amount1","currency1","country1","amount2","currency2","country2","amount3","currency3","country3",
+  "amount","currency","country","signature_present","notes"];
+let picked = [], results = [];
+
+try { $("key").value = localStorage.getItem("ld-key") || ""; } catch {}
+$("key").addEventListener("change", () => { try { localStorage.setItem("ld-key", $("key").value.trim()); } catch {} });
+
+const drop = $("drop");
+drop.onclick = () => $("files").click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); pick([...e.dataTransfer.files]); };
+$("files").onchange = e => pick([...e.target.files]);
+
+function pick(files) {
+  picked = files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  $("picked").textContent = files.length ? `${files.length} datotek` : "";
+  $("go").disabled = !files.length;
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + $("key").value.trim() } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+  return body;
+}
+
+$("go").onclick = async () => {
+  const form = new FormData();
+  picked.forEach(f => form.append("files", f));
+  const batch = picked.length > 2 || picked.some(f => /\.zip$/i.test(f.name));
+  $("go").disabled = true; $("bar").hidden = false; $("bar").removeAttribute("value");
+  results = []; render();
+  try {
+    if (!batch) {
+      $("status").textContent = "Berem dokument …";
+      results = [{ status: "done", ...await api("/v1/extract", { method: "POST", body: form }) }];
+      render();
+    } else {
+      $("status").textContent = "Nalagam …";
+      const { job_id, total } = await api("/v1/batch", { method: "POST", body: form });
+      $("bar").max = total;
+      for (;;) {
+        const job = await api("/v1/batch/" + job_id);
+        $("bar").value = job.done;
+        $("status").textContent = `${job.done} / ${job.total} dokumentov`;
+        results = job.documents; render();
+        if (job.status !== "running") break;
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+    $("status").textContent = "Končano.";
+  } catch (e) {
+    $("status").textContent = "Napaka: " + e.message;
+  } finally {
+    $("go").disabled = false; $("bar").hidden = true;
+  }
+};
+
+function cell(v) {
+  if (v === null || v === undefined) return '<span class="null">—</span>';
+  if (Array.isArray(v)) return v.join(", ");
+  if (typeof v === "boolean") return v ? "da" : "ne";
+  return String(v).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function render() {
+  $("out").hidden = !results.length;
+  const done = results.filter(d => d.status === "done");
+  const unsure = done.filter(d => d.uncertain_fields?.length).length;
+  $("summary").textContent = `${done.length} prebranih, ${unsure} za preverbo, ${results.filter(d => d.status === "error").length} napak`;
+  $("tbl").innerHTML = "<tr>" + COLS.map(c => `<th>${c}</th>`).join("") + "</tr>" + results.map(d => {
+    if (d.status === "error") return `<tr class="error"><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}">${cell(d.error)}</td></tr>`;
+    if (d.status === "pending") return `<tr><td>${cell(d.pages)}</td><td colspan="${COLS.length - 1}" class="null">čaka …</td></tr>`;
+    const unsureSet = new Set(d.uncertain_fields || []);
+    return "<tr>" + COLS.map(c => {
+      const notes = c === "notes" ? [d.notes, ...(d.warnings || [])].filter(Boolean).join(" · ") : null;
+      return `<td class="${unsureSet.has(c) ? "unsure" : ""}${c === "notes" ? " notes" : ""}">${cell(c === "notes" ? notes || null : d[c])}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
+}
+
+$("dl").onclick = () => {
+  const clean = results.filter(d => d.status === "done").map(({ status, ...d }) => d);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(clean, null, 2)], { type: "application/json" }));
+  a.download = "ld-rezultati.json"; a.click();
+};
+</script>
+</body>
+</html>

@@ -112,3 +112,8 @@ def test_batch(client):
     assert all(d["status"] == "done" for d in job["documents"])
     assert client.get("/v1/batch/nope", headers={"Authorization": "Bearer k"}).status_code == 404
     assert json.loads(next(main.JOBS_DIR.glob("*.json")).read_text())["status"] == "done"
+
+
+def test_ui(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "/v1/batch" in r.text

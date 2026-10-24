@@ -8,7 +8,7 @@ API at **https://id-docs.etiam.si** that reads ZPIZ "Izjava o višini tuje pokoj
 
 ## API
 
-Every `/v1` call needs `Authorization: Bearer <API key>`. Interactive docs are at `/docs`.
+A simple upload page is at `/`: enter the API key, drop the scans, and download the results as JSON. Every `/v1` call needs `Authorization: Bearer <API key>`. Interactive docs are at `/docs`.
 
 ### One document: `POST /v1/extract`
 Send page 1 and page 2 as two files, or one multi-page TIFF/PDF. TIFF, PNG, JPEG and PDF are accepted. The call waits for the answer (usually 15–30 s).
@@ -36,7 +36,7 @@ curl -H "Authorization: Bearer $KEY" \
   "notes": "decimals are written as two open loops: read as 00, could be 02",
   "warnings": [],
   "pages": ["00000001.tif", "00000002.tif"],
-  "model": "claude-opus-5-5"
+  "model": "claude-sonnet-5-5"
 }
 ```
 
@@ -69,7 +69,7 @@ Results are kept for `JOB_TTL_DAYS` (7), then deleted, because they hold persona
 | Variable | Default | |
 |---|---|---|
 | `API_KEYS` | (none, so every call gets 503) | comma-separated; one per client, e.g. one for ZPIZ |
-| `CLAUDE_MODEL` | `opus` | |
+| `CLAUDE_MODEL` | `sonnet` | `opus` reads messy handwriting a bit better but costs much more |
 | `MAX_PARALLEL` | `4` | batch runs at once |
 | `MAX_PARALLEL_SINGLE` | `4` | `/v1/extract` runs at once, on their own slots so they never wait behind a batch (Cloudflare cuts a request after ~100 s) |
 | `JOB_TTL_DAYS` | `7` | |

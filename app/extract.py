@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .pages import Document
 
-MODEL = os.environ.get("CLAUDE_MODEL", "opus")
+MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
 TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "300"))
 PROMPT = (Path(__file__).parent / "prompt.md").read_text()
 IMAGE_MAX_SIDE = 2000
