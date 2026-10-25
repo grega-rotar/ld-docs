@@ -49,3 +49,4 @@ services:
 
 volumes:
   ollama:
+    name: ollama  # the models (6 GB); a fixed name, so a rebuild or a renamed project keeps them
