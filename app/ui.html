@@ -79,6 +79,16 @@ a { color: var(--pen); }
   content: ""; position: absolute; left: 12px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%;
   background: var(--dot); transition: background .3s;
 }
+.readers { display: none; align-items: center; gap: 10px; }
+.readers.on { display: flex; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--bed-2); }
+.seg button {
+  border: 0; background: transparent; padding: 5px 11px; border-radius: 6px; cursor: pointer;
+  font: 600 12.5px var(--body); color: var(--ink-2); transition: background .2s, color .2s, box-shadow .2s;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow); }
+body.working .readers { pointer-events: none; opacity: .55; }
 .key.on .wrap::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
 
 /* ---------- start screen ---------- */
@@ -181,6 +191,7 @@ body.working .work { display: grid; }
 .tag.check { background: var(--hl); padding: 2px 7px; border-radius: 3px; transform: rotate(-1.5deg); }
 .tag.clear { color: var(--ok); }
 .tag.err { color: var(--err); }
+.tag.diff { color: var(--amber); }
 .tag.wait { color: var(--ink-3); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
 .tag.wait::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rule); border-top-color: var(--pen); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -254,6 +265,11 @@ body.working .work { display: grid; }
 .f.hl .comb i { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 35%, transparent); }
 .hand { display: grid; grid-template-columns: auto 1fr 1fr; gap: 18px 28px; align-items: start; }
 .line { display: inline-block; min-width: 140px; border-bottom: 1.5px solid var(--ink); padding: 0 4px 2px; }
+.alt { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; font: 500 12.5px var(--mono); color: var(--amber); }
+.alt::before { content: "Claude"; font: 650 10.5px var(--body); letter-spacing: .04em; text-transform: uppercase; }
+.f.diff .l { color: var(--amber); }
+.metrics.other { margin-top: -14px; }
+.metrics.other .err { color: var(--err); font: 600 12.5px var(--body); }
 .notes { margin-top: 24px; padding: 14px 16px; border-left: 3px solid var(--hl); background: color-mix(in srgb, var(--hl) 16%, transparent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
 .notes p { margin: 0 0 6px; } .notes p:last-child { margin: 0; }
 .notes .warn { color: var(--err); font-weight: 600; }
@@ -363,6 +379,14 @@ kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width
     <span><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></span>
   </button>
   <a class="navlink" href="/docs" target="_blank" rel="noopener">API dokumentacija <span>↗</span></a>
+  <div class="readers" id="readers">
+    <span class="label">Branje</span>
+    <span class="seg" role="group" aria-label="Kdo bere">
+      <button data-r="local" title="Lokalni bralnik (GPU), brez stroška API">Lokalno</button>
+      <button data-r="claude" title="Claude prek claude-pool">Claude</button>
+      <button data-r="both" title="Oba hkrati: lokalni rezultat, razlike s Claude označene">Primerjava</button>
+    </span>
+  </div>
   <div class="key" id="keybox">
     <label class="label" for="key">API ključ</label>
     <span class="wrap"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="zpiz-…"></span>
@@ -481,9 +505,32 @@ const LOCAL_STAGES = [
   ["preparing", "Pripravljam sliki strani"],
   ["reading", "Berem lokalno: oznake, števke, rokopis"],
 ];
-let LOCAL = false;  // from GET /health
+// Who reads: "local", "claude" or "both" (both read, the local result is shown with Claude's differences).
+// The server says which it has (GET /health); the choice is remembered, and a run keeps the reader it started with.
+let READERS = ["claude"], choice = "claude", MODE = "claude";
 let STAGES = CLAUDE_STAGES;
-fetch("/health").then(r => r.json()).then(h => { LOCAL = h.reader === "local"; STAGES = LOCAL ? LOCAL_STAGES : CLAUDE_STAGES; }).catch(() => {});
+const setMode = m => { MODE = m; STAGES = m === "local" ? LOCAL_STAGES : CLAUDE_STAGES; };
+function showReaders() {
+  $("readers").classList.toggle("on", READERS.length > 1);
+  $("readers").querySelectorAll("button").forEach(b => {
+    b.hidden = !READERS.includes(b.dataset.r);
+    b.setAttribute("aria-pressed", b.dataset.r === choice);
+  });
+}
+$("readers").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b || running) return;
+  choice = b.dataset.r;
+  try { localStorage.setItem("ld-reader", choice); } catch {}
+  showReaders();
+});
+fetch("/health").then(r => r.json()).then(h => {
+  READERS = h.readers || [h.reader];
+  let saved = null;
+  try { saved = localStorage.getItem("ld-reader"); } catch {}
+  choice = READERS.includes(saved) ? saved : h.reader;
+  setMode(choice); showReaders();
+}).catch(() => {});
 const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "zaganja", retrying: "ponovno", page1: "stran 1", page2: "stran 2", thinking: "primerja", writing: "zapisuje", reading: "bere" };
 const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing", "reading"]);
 const MB = b => nf(b / 1048576, 1);
@@ -615,8 +662,10 @@ async function start(files) {
   });
   tick();
   registerSources(files).catch(() => {}).then(() => { lastScan = ""; renderScan(); });
+  setMode(choice);
   const form = new FormData();
   files.forEach(f => form.append("files", f));
+  form.append("reader", choice);
   try {
     const { job_id } = await upload("/v1/batch", form, (sent, total) => {
       if (mine === session) { up = { sent, total }; render(); }
@@ -627,6 +676,7 @@ async function start(files) {
       const job = await api("/v1/batch/" + job_id);
       if (mine !== session) return;
       parallel = job.parallel || parallel;
+      if (job.reader && job.reader !== MODE) setMode(job.reader);
       if (job.status === "error") throw new Error(job.error);
       if (job.status === "splitting") splitting = job.split || splitting;
       else { phase = "read"; docs = job.documents; if (follow) followActive(); }
@@ -670,6 +720,15 @@ const conf = (d, k) => (d.confidence || {})[k];
 const needsCheck = (d, k) => (d.uncertain_fields || []).includes(k) || (typeof conf(d, k) === "number" && conf(d, k) < CHECK_BELOW);
 const checkCount = d => d.status === "done" ? Object.keys(d.confidence || {}).filter(k => needsCheck(d, k)).length : 0;
 const docKey = d => (d.pages || []).join("|");
+const differs = (d, k) => ((d.compare || {}).differences || []).includes(k);
+const diffCount = d => d.status === "done" ? ((d.compare || {}).differences || []).length : 0;
+function plain(k, v) {
+  if (v === null || v === undefined || v === "") return "prazno";
+  if (k === "signature_present") return v ? "podpisano" : "ni podpisa";
+  if (typeof v === "boolean") return v ? "DA" : "NE";
+  if (typeof v === "number") return nf(v, 2);
+  return v;
+}
 
 function signal(d, k) {
   const p = conf(d, k);
@@ -682,7 +741,9 @@ function signal(d, k) {
 
 let fieldIndex = 0;
 function field(d, k, label, inner) {
-  return `<div class="f ${needsCheck(d, k) ? "hl" : ""}" style="--i:${fieldIndex++}"><span class="l">${label}${signal(d, k)}</span>${inner}</div>`;
+  const diff = differs(d, k);
+  const alt = diff ? `<span class="alt">${esc(plain(k, d.compare.result[k]))}</span>` : "";
+  return `<div class="f ${needsCheck(d, k) ? "hl" : ""} ${diff ? "diff" : ""}" style="--i:${fieldIndex++}"><span class="l">${label}${signal(d, k)}</span>${inner}${alt}</div>`;
 }
 
 function text(v, pen = false) {
@@ -735,11 +796,20 @@ function render() {
     const left = docs.length - finished;
     eta = left ? `<span class="eta">še ~${secs(Math.ceil(left / parallel) * sum("duration_ms") / done.length)}</span>` : "";
   }
+  const compared = done.filter(d => d.compare && d.compare.result);
+  const diffs = compared.filter(d => diffCount(d)).length;
   $("qstats").innerHTML = before ? `<span>${phase === "upload" ? `${MB(up.sent)} / ${MB(up.total)} MB` : `${splitting.done} / ${splitting.total || "…"} strani`}</span>`
-    : `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${errors ? `<span><b>${errors}</b> napak</span>` : ""}${eta}`;
+    : `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${MODE === "both" ? `<span><b>${diffs}</b> z razlikami</span>` : ""}${errors ? `<span><b>${errors}</b> napak</span>` : ""}${eta}`;
   const tok = done.reduce((n, d) => n + tokens(d.usage || {}), 0);
   $("totals").innerHTML = `<div><b>${done.length ? secs(sum("duration_ms") / done.length) : "–"}</b><span>na dokument</span></div>`
-    + (LOCAL ? `<div><b>${done.length}</b><span>prebranih</span></div><div><b>0 $</b><span>lokalno</span></div>`
+    + (MODE === "both" ? (() => {
+        const fields = compared.reduce((n, d) => n + Object.keys(d.confidence || {}).length, 0);
+        const same = fields - compared.reduce((n, d) => n + diffCount(d), 0);
+        const cost = compared.reduce((n, d) => n + ((d.compare.result.usage || {}).cost_usd || 0), 0);
+        return `<div><b>${fields ? nf(100 * same / fields, 1) + " %" : "–"}</b><span>enako kot Claude</span></div>`
+          + `<div><b>${compared.length ? usd(cost) : "–"}</b><span>Claude, cena API</span></div>`;
+      })()
+      : MODE === "local" ? `<div><b>${done.length}</b><span>prebranih</span></div><div><b>0 $</b><span>lokalno</span></div>`
       : `<div><b>${done.length ? nf(tok) : "–"}</b><span>žetonov</span></div>`
       + `<div><b>${done.length ? usd(sum("cost_usd")) : "–"}</b><span>po ceni API</span></div>`);
   $("dl").disabled = !done.length || running;
@@ -753,6 +823,7 @@ function itemHtml(d, i) {
   const tag = d.status === "pending"
     ? `<span class="tag wait ${d.stage === "queued" ? "q" : ""}">${SHORT[d.stage] || "bere"}${d.stage === "writing" && d.of ? ` ${d.fields}/${d.of}` : ""}</span>`
     : d.status === "error" ? `<span class="tag err">napaka</span>`
+    : MODE === "both" && diffCount(d) ? `<span class="tag diff">${diffCount(d)} ${diffCount(d) === 1 ? "razlika" : diffCount(d) === 2 ? "razliki" : diffCount(d) < 5 ? "razlike" : "razlik"}</span>`
     : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag clear">jasno</span>`;
   const title = d.case_number || (d.status === "pending" ? (d.stage === "queued" ? "V vrsti" : "Berem …") : d.status === "error" ? "Ni prebrano" : "Brez zadeve");
   return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
@@ -808,7 +879,7 @@ function reading(d) {
       <div class="skel"><span></span><span></span><span></span><span></span><span></span></div>
     </div>`;
   }
-  const stage = d.stage === "retrying" ? (LOCAL ? "reading" : "starting") : d.stage || "queued";
+  const stage = d.stage === "retrying" ? (MODE === "local" ? "reading" : "starting") : d.stage || "queued";
   const now = STAGES.findIndex(([k]) => k === stage);
   m.querySelectorAll(".steps li").forEach((li, i) => {
     const k = li.dataset.k;
@@ -862,9 +933,17 @@ function renderMirror() {
       <div><b>${secs(u.duration_ms || 0)}</b><span>branje</span></div>
       <div><b>${nf(tokens(u))}</b><span>žetonov · ${nf(u.input_tokens + u.cache_read_tokens + u.cache_write_tokens)} vhod, ${nf(u.output_tokens)} izhod</span></div>
       <div class="cost"><b>${usd(u.cost_usd || 0)}</b><span>po ceni API</span></div></div>` : "";
+  const c = d.compare, cu = (c && c.result && c.result.usage) || {};
+  const other = !c ? "" : c.error
+    ? `<div class="metrics other"><span class="err">${c.reader === "claude" ? "Claude" : "Lokalni bralnik"} ni prebral: ${esc(c.error)}</span></div>`
+    : `<div class="metrics other" title="Drugo branje istega dokumenta. Polja, kjer se razlikuje, so označena spodaj.">
+      <div><b>${c.reader === "claude" ? "Claude" : "lokalno"}</b><span>${esc(c.result.model || "")}</span></div>
+      <div><b>${secs(cu.duration_ms || 0)}</b><span>branje</span></div>
+      <div><b>${c.differences.length}</b><span>${c.differences.length === 1 ? "razlika" : "razlik"}</span></div>
+      <div class="cost"><b>${usd(cu.cost_usd || 0)}</b><span>po ceni API</span></div></div>`;
   const rows = [1, 2, 3].map(i => {
     const keys = [`amount${i}`, `currency${i}`, `country${i}`];
-    if (keys.every(k => d[k] === null && !needsCheck(d, k))) {
+    if (keys.every(k => d[k] === null && !needsCheck(d, k) && !differs(d, k))) {
       return `<div class="row empty"><span class="n">${i}</span><span class="what">Vrstica je prazna</span><span class="f" style="--i:${fieldIndex++}">${signal(d, keys[0])}</span></div>`;
     }
     return `<div class="row"><span class="n">${i}</span>
@@ -874,7 +953,7 @@ function renderMirror() {
   const notes = [d.notes && `<p>${esc(d.notes)}</p>`, ...(d.warnings || []).map(w => `<p class="warn">${esc(w)}</p>`)].filter(Boolean).join("");
   const handText = v => v ? `<span class="v pen"><span class="line">${esc(v)}</span></span>` : text(null);
   m.innerHTML = `<article class="sheet ${reveal ? "reveal" : ""}">
-    ${metrics}
+    ${metrics}${other}
     <div class="ids">
       ${field(d, "case_number", "Zadeva", text(d.case_number))}
       ${field(d, "document_id", "ID dokumenta · QR", text(d.document_id))}

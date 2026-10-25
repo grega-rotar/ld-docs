@@ -122,6 +122,21 @@ On the server, set `READER_URL=https://ld-reader.etiam.si` and `READER_KEY=<one 
 `/srv/ld-docs/.env` and restart. Without `READER_URL` the API uses Claude as before.
 If the reader is down, `/v1/extract` answers 503 and batch documents get `status: error`; send them again later.
 
+### Local, Claude, or both
+With `READER_URL` set, both readers are available (`GET /health` lists them in `readers`). The local one is the
+default; a call picks another with the form field `reader`:
+
+```bash
+curl -H "Authorization: Bearer $KEY" -F reader=both -F files=@ld_test.zip https://ld-docs.etiam.si/v1/batch
+```
+
+`reader=both` reads every document with both at once and returns the local result plus `compare`:
+`{"reader": "claude", "differences": ["amount", …], "result": {…Claude's whole result…}}`, or
+`{"reader": "claude", "error": "…"}` if Claude failed (if the local reader failed, the answer is Claude's and
+`compare` holds the local error). Amounts are compared to the cent; names ignore case and accents. In the upload
+page, the switch next to the API key does the same: "Primerjava" shows each field Claude read differently under it.
+Each reader keeps its own slots, so a comparison is as fast as the slower of the two.
+
 ### Check accuracy on scans
 ```bash
 # reference: a /v1/batch result for the same scans (e.g. from the Claude version), saved as results/ref.json
@@ -166,10 +181,11 @@ python -m reader.training.finetune_digits results/cells.npz                     
 |---|---|---|
 | `API_KEYS` | (none, so every call gets 503) | comma-separated; one per client, e.g. one for ZPIZ |
 | `CLAUDE_MODEL` | `sonnet` | `opus` reads messy handwriting a bit better but costs much more |
-| `MAX_PARALLEL` | `6` | batch documents read at once (each claude run uses ~300 MB RAM) |
-| `MAX_PARALLEL_SINGLE` | `4` | `/v1/extract` runs at once, on their own slots so they never wait behind a batch (Cloudflare cuts a request after ~100 s) |
+| `MAX_PARALLEL` | `6` | batch documents Claude reads at once (each claude run uses ~300 MB RAM) |
+| `MAX_PARALLEL_SINGLE` | `4` | `/v1/extract` runs at once per reader, on their own slots so they never wait behind a batch (Cloudflare cuts a request after ~100 s) |
 | `JOB_TTL_DAYS` | `7` | |
-| `READER_URL` | (none: Claude reads) | the local reader, e.g. `https://ld-reader.etiam.si` (see "Local reader"); `MAX_PARALLEL` then defaults to 3 |
+| `READER_URL` | (none: Claude reads) | the local reader, e.g. `https://ld-reader.etiam.si` (see "Local reader"); it becomes the default reader |
+| `LOCAL_PARALLEL` | `3` | batch documents sent to the local reader at once |
 | `READER_KEY` | | one of the reader's `READER_KEYS` |
 
 ## Development

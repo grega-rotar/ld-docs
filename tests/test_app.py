@@ -153,8 +153,9 @@ def test_usage_of():
                                 "cache_write_tokens": 50, "cost_usd": 0.01235}
 
 
-def test_extract_local(client, monkeypatch):
-    """READER_URL set: the pages go to the local reader at full resolution; the QR code is still read here."""
+@pytest.fixture
+def local(monkeypatch):
+    """READER_URL set: a fake local reader next to the fake Claude. Returns what it was sent."""
     sent = {}
 
     async def fake_reader(doc, progress=ex.no_progress):
@@ -168,8 +169,14 @@ def test_extract_local(client, monkeypatch):
             "margin": {"document_id": "999", "vk": None}, "model": "local (qwen3-vl:8b-instruct)",
         }  # fmt: skip
 
-    monkeypatch.setattr(ex, "READER_URL", "https://reader.example")
+    monkeypatch.setattr(ex, "READERS", [ex.LOCAL, ex.CLAUDE])
+    monkeypatch.setattr(ex, "DEFAULT_READER", ex.LOCAL)
     monkeypatch.setattr(ex, "run_local", fake_reader)
+    return sent
+
+
+def test_extract_local(client, local, monkeypatch):
+    """The pages go to the local reader at full resolution; the QR code is still read here."""
     qrs = iter([{"document_id": "141", "vk": "968"}, None])  # page 1 has the QR code, page 2 none
     monkeypatch.setattr("app.pages.read_qr", lambda im: next(qrs))
     r = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=[("files", ("1.tif", tif())), ("files", ("2.tif", tif()))])
@@ -180,11 +187,52 @@ def test_extract_local(client, monkeypatch):
     assert body["uncertain_fields"] == ["amount"] and body["model"].startswith("local")
     assert "page 1: yes/no boxes not found" in body["warnings"]
     assert any("differs from the margin text (999)" in w for w in body["warnings"])
-    assert body["usage"]["cost_usd"] == 0.0
-    assert Image.open(io.BytesIO(sent["pages"][0])).size == (200, 300)  # not shrunk
+    assert body["usage"]["cost_usd"] == 0.0 and "compare" not in body
+    assert Image.open(io.BytesIO(local["pages"][0])).size == (200, 300)  # not shrunk
+
+
+def test_choose_reader(client, local):
+    two = [("files", ("1.tif", tif())), ("files", ("2.tif", tif()))]
+    r = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=two, data={"reader": "claude"})
+    assert r.status_code == 200 and r.json()["model"] == "m"
+    r = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=two, data={"reader": "gpt"})
+    assert r.status_code == 400
+
+
+def test_compare_both(client, local):
+    """reader=both: the local answer, with Claude's whole result and the fields where they differ."""
+    two = [("files", ("1.tif", tif())), ("files", ("2.tif", tif()))]
+    body = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=two, data={"reader": "both"}).json()
+    assert body["model"].startswith("local") and body["compare"]["reader"] == "claude"
+    assert body["compare"]["result"]["model"] == "m" and body["compare"]["result"]["usage"]["cost_usd"] == 0.006
+    assert body["compare"]["differences"] == ["country"]  # Claude read no country; the rest is equal (None or the same)
+    with client:
+        job_id = client.post("/v1/batch", headers={"Authorization": "Bearer k"}, files={"files": ("all.tif", tif(2))},
+                             data={"reader": "both"}).json()["job_id"]  # fmt: skip
+        job = poll(client, job_id)
+    assert job["reader"] == "both" and job["documents"][0]["compare"]["differences"] == ["country"]
+
+
+def test_compare_when_one_fails(client, local, monkeypatch):
+    async def down(doc, progress=ex.no_progress):
+        raise ex.ExtractError("reader unreachable (ConnectError)", exhausted=True)
+
+    monkeypatch.setattr(ex, "run_local", down)
+    two = [("files", ("1.tif", tif())), ("files", ("2.tif", tif()))]
+    body = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=two, data={"reader": "both"}).json()
+    assert body["model"] == "m" and body["compare"] == {"reader": "local", "error": "reader unreachable (ConnectError)"}
+
+
+def test_same():
+    assert ex.same(2500.5, 2500.50) and ex.same("Litva", "LITVA ") and ex.same("ŠVEDSKA", "švedska") and ex.same(None, None)
+    assert not ex.same(2500.5, 2500.05) and not ex.same("BAM", None) and not ex.same(True, 1)
 
 
 def test_health_says_which_reader(client, monkeypatch):
-    assert client.get("/health").json()["reader"] == "claude"
-    monkeypatch.setattr(main, "READER_URL", "https://reader.example")
-    assert client.get("/health").json()["reader"] == "local"
+    assert client.get("/health").json() == {"ok": True, "reader": "claude", "readers": ["claude"]}
+    monkeypatch.setattr(ex, "READERS", [ex.LOCAL, ex.CLAUDE])
+    monkeypatch.setattr(ex, "DEFAULT_READER", ex.LOCAL)
+    assert client.get("/health").json()["readers"] == ["local", "claude", "both"]
+    two = [("files", ("1.tif", tif())), ("files", ("2.tif", tif()))]
+    monkeypatch.setattr(ex, "READERS", [ex.CLAUDE])
+    assert client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=two, data={"reader": "both"}).status_code == 400
