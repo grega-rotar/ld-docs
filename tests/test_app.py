@@ -151,3 +151,40 @@ def test_usage_of():
         "b": {"inputTokens": 1, "outputTokens": 2}}}
     assert ex.usage_of(out) == {"input_tokens": 4, "output_tokens": 402, "cache_read_tokens": 1000,
                                 "cache_write_tokens": 50, "cost_usd": 0.01235}
+
+
+def test_extract_local(client, monkeypatch):
+    """READER_URL set: the pages go to the local reader at full resolution; the QR code is still read here."""
+    sent = {}
+
+    async def fake_reader(doc, progress=ex.no_progress):
+        progress("preparing")
+        sent["pages"] = [ex.page_png(p) for p in doc.pages[:2]]
+        progress("reading")
+        return {k: None for k in ex.FIELDS} | {
+            "case_number": "10344-1/2023", "amount": 2500.5, "country": "ŠVEDSKA", "country_code": "SE",
+            "confidence": {k: 0.99 for k in ex.FIELDS} | {"amount": 0.75}, "uncertain_fields": ["amount"],
+            "notes": "stran 2, znesek: števke prebrane različno", "warnings": ["page 1: yes/no boxes not found"],
+            "margin": {"document_id": "999", "vk": None}, "model": "local (qwen3-vl:8b-instruct)",
+        }  # fmt: skip
+
+    monkeypatch.setattr(ex, "READER_URL", "https://reader.example")
+    monkeypatch.setattr(ex, "run_local", fake_reader)
+    qrs = iter([{"document_id": "141", "vk": "968"}, None])  # page 1 has the QR code, page 2 none
+    monkeypatch.setattr("app.pages.read_qr", lambda im: next(qrs))
+    r = client.post("/v1/extract", headers={"Authorization": "Bearer k"}, files=[("files", ("1.tif", tif())), ("files", ("2.tif", tif()))])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert (body["document_id"], body["vk"], body["amount"], body["country_code"]) == ("141", "968", 2500.5, "SE")
+    assert body["confidence"]["document_id"] == 1.0 and body["confidence"]["amount"] == 0.75
+    assert body["uncertain_fields"] == ["amount"] and body["model"].startswith("local")
+    assert "page 1: yes/no boxes not found" in body["warnings"]
+    assert any("differs from the margin text (999)" in w for w in body["warnings"])
+    assert body["usage"]["cost_usd"] == 0.0
+    assert Image.open(io.BytesIO(sent["pages"][0])).size == (200, 300)  # not shrunk
+
+
+def test_health_says_which_reader(client, monkeypatch):
+    assert client.get("/health").json()["reader"] == "claude"
+    monkeypatch.setattr(main, "READER_URL", "https://reader.example")
+    assert client.get("/health").json()["reader"] == "local"

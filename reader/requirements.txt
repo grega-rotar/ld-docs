@@ -1,0 +1,13 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+pillow==13.0.0
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
+pytesseract==0.3.13
+rapidfuzz==3.14.6
+babel==2.18.0
+httpx==0.28.1
+onnxruntime==1.31.0
+pyzbar==0.1.9
+pymupdf==2.0
