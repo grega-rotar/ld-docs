@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
 import httpx
@@ -51,11 +52,23 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-# Batches share MAX_PARALLEL claude runs; single calls have their own slots, so they never queue behind a batch
-# (Cloudflare drops a request after ~100 s of silence).
-BATCH_PARALLEL = int(os.environ.get("MAX_PARALLEL", "3" if READER_URL else "6"))  # the local reader reads 2 at a time
-BATCH_SLOTS = asyncio.Semaphore(BATCH_PARALLEL)
-SINGLE_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL_SINGLE", "4")))
+# Each reader has its own slots, so comparing them never slows either down. Batches share PARALLEL[reader] runs;
+# single calls have their own slots, so they never queue behind a batch (Cloudflare drops a request after ~100 s of silence).
+LOCAL, CLAUDE, BOTH = "local", "claude", "both"
+READERS = [LOCAL, CLAUDE] if READER_URL else [CLAUDE]
+DEFAULT_READER = READERS[0]
+PARALLEL = {
+    LOCAL: int(os.environ.get("LOCAL_PARALLEL", "3")),  # the local reader reads 2 at a time
+    CLAUDE: int(os.environ.get("MAX_PARALLEL", "6")),
+}
+SLOTS = {
+    r: {True: asyncio.Semaphore(n), False: asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL_SINGLE", "4")))}
+    for r, n in PARALLEL.items()
+}
+
+
+def parallel_of(reader: str) -> int:
+    return min(PARALLEL[r] for r in (READERS if reader == BOTH else [reader]))
 
 
 class ExtractError(Exception):
@@ -264,24 +277,29 @@ async def extract_local(doc: Document, progress=no_progress) -> dict:
     }
 
 
-async def extract(doc: Document, batch: bool = False, progress=no_progress) -> dict:
-    """The flat result: link to the case first, then ZPIZ's 14 fields, then what to double-check."""
-    if READER_URL:
-        async with BATCH_SLOTS if batch else SINGLE_SLOTS:
-            return await extract_local(doc, progress)
-    async with BATCH_SLOTS if batch else SINGLE_SLOTS:
-        started = time.monotonic()  # after the queue: this is how long reading took, not waiting
-        progress("preparing")
-        with tempfile.TemporaryDirectory(prefix="ld-") as tmp:
-            files = await asyncio.to_thread(write_pngs, doc, tmp)
-            try:
-                raw, model, usage = await run_claude(tmp, files, progress)
-            except ExtractError as e:
-                if e.exhausted:
-                    raise
-                progress("retrying")
-                raw, model, usage = await run_claude(tmp, files, progress)  # runs that start together sometimes fail
-        usage = {"duration_ms": round((time.monotonic() - started) * 1000), **usage}
+async def extract(doc: Document, batch: bool = False, progress=no_progress, reader: str | None = None) -> dict:
+    """The flat result: link to the case first, then ZPIZ's 14 fields, then what to double-check.
+    reader "both" reads with the local reader and Claude at once and adds `compare` (see compare())."""
+    reader = reader or DEFAULT_READER
+    if reader == BOTH:
+        return await compare(doc, batch, progress)
+    async with SLOTS[reader][batch]:
+        return await READ[reader](doc, progress)
+
+
+async def extract_claude(doc: Document, progress=no_progress) -> dict:
+    started = time.monotonic()  # after the queue: this is how long reading took, not waiting
+    progress("preparing")
+    with tempfile.TemporaryDirectory(prefix="ld-") as tmp:
+        files = await asyncio.to_thread(write_pngs, doc, tmp)
+        try:
+            raw, model, usage = await run_claude(tmp, files, progress)
+        except ExtractError as e:
+            if e.exhausted:
+                raise
+            progress("retrying")
+            raw, model, usage = await run_claude(tmp, files, progress)  # runs that start together sometimes fail
+    usage = {"duration_ms": round((time.monotonic() - started) * 1000), **usage}
     data = clean(raw)
     qr = doc.qr or {}
     warnings = doc_warnings(doc)
@@ -301,3 +319,41 @@ async def extract(doc: Document, batch: bool = False, progress=no_progress) -> d
         "model": model,
         "usage": usage,
     }
+
+
+READ = {LOCAL: extract_local, CLAUDE: extract_claude}
+
+
+def fold(v: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", v) if not unicodedata.combining(c)).casefold().strip()
+
+
+def same(a, b) -> bool:
+    """Equal as ZPIZ would see it: amounts to the cent, names without case or accents (Litva = LITVA)."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b  # True == 1 in Python
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return round(a, 2) == round(b, 2)
+    if isinstance(a, str) and isinstance(b, str):
+        return fold(a) == fold(b)
+    return a == b
+
+
+async def compare(doc: Document, batch: bool, progress=no_progress) -> dict:
+    """Both readers on the same document. The local result is the answer (Claude's if the local one failed);
+    `compare` holds the other reader's whole result and the fields where the two differ, or its error."""
+    async def read(reader, report):
+        async with SLOTS[reader][batch]:
+            return await READ[reader](doc, report)
+
+    # Claude reports the finer stages, so the progress shown is its own.
+    local, claude = await asyncio.gather(read(LOCAL, no_progress), read(CLAUDE, progress), return_exceptions=True)
+    if isinstance(local, BaseException) and isinstance(claude, BaseException):
+        raise local
+    main, other, name = (claude, local, LOCAL) if isinstance(local, BaseException) else (local, claude, CLAUDE)
+    if isinstance(other, BaseException):
+        main["compare"] = {"reader": name, "error": str(other) or type(other).__name__}
+    else:
+        keys = ["case_number", "document_id", "vk", *(k for k in FIELDS if k != "case_number")]
+        main["compare"] = {"reader": name, "differences": [k for k in keys if not same(main.get(k), other.get(k))], "result": other}
+    return main

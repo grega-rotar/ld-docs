@@ -7,11 +7,12 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .extract import BATCH_PARALLEL, READER_URL, ExtractError, extract
+from . import extract as ex
+from .extract import ExtractError, extract
 from .pages import group, load_pages, unpack
 
 API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]
@@ -61,20 +62,36 @@ def ui():
     return FileResponse(Path(__file__).parent / "ui.html")
 
 
+def readers() -> list[str]:
+    return ex.READERS + [ex.BOTH] * (len(ex.READERS) > 1)
+
+
+def pick(reader: str | None) -> str:
+    reader = reader or ex.DEFAULT_READER
+    if reader not in readers():
+        raise HTTPException(400, f"reader must be one of {readers()}")
+    return reader
+
+
+# The form field `reader` on /v1/extract and /v1/batch.
+READER = Form(None, description='"local", "claude", or "both" (reads with both and adds `compare`); default: GET /health "reader"')
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "reader": "local" if READER_URL else "claude"}
+    return {"ok": True, "reader": ex.DEFAULT_READER, "readers": readers()}
 
 
 @app.post("/v1/extract", dependencies=[Depends(auth)])
-async def extract_one(files: list[UploadFile] = File(...)):
+async def extract_one(files: list[UploadFile] = File(...), reader: str | None = READER):
     """One document: page 1 and page 2 as two files, or one multi-page TIFF/PDF."""
+    reader = pick(reader)
     docs = await documents(files)
     if len(docs) > 1:
         raise HTTPException(400, f"found {len(docs)} documents (pages {[d.pages[0].name for d in docs]}); "
                                  "send one document here, or use /v1/batch")
     try:
-        return await extract(docs[0])
+        return await extract(docs[0], reader=reader)
     except ExtractError as e:
         raise HTTPException(503 if e.exhausted else 502, str(e)) from None
 
@@ -111,7 +128,7 @@ async def run_job(job: dict, files: list[tuple[str, bytes]]):
 
     async def one(i, doc):
         try:
-            job["documents"][i] = {"status": "done", **await extract(doc, batch=True, progress=progress_of(i))}
+            job["documents"][i] = {"status": "done", **await extract(doc, batch=True, progress=progress_of(i), reader=job["reader"])}
         except Exception as e:
             job["documents"][i] = {"status": "error", "error": str(e), "pages": [p.name for p in doc.pages]}
         job["done"] += 1
@@ -137,14 +154,16 @@ def cleanup():
 
 
 @app.post("/v1/batch", dependencies=[Depends(auth)], status_code=202)
-async def batch(files: list[UploadFile] = File(...)):
+async def batch(files: list[UploadFile] = File(...), reader: str | None = READER):
     """Many documents: loose pages (sorted by name, e.g. 00000001.tif, 00000002.tif …), multi-page files or a ZIP.
     Answers right away; the pages are split into documents (at the QR code on each page 1) in the background.
     Poll GET /v1/batch/{job_id}: status goes splitting -> running -> done (or error)."""
+    reader = pick(reader)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     cleanup()
     job = {
-        "job_id": uuid.uuid4().hex, "status": "splitting", "created_at": time.time(), "parallel": BATCH_PARALLEL,
+        "job_id": uuid.uuid4().hex, "status": "splitting", "created_at": time.time(),
+        "reader": reader, "parallel": ex.parallel_of(reader),
         "split": {"done": 0, "total": 0}, "total": None, "done": 0, "documents": [],
     }  # fmt: skip
     _live[job["job_id"]] = job
