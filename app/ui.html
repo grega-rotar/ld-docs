@@ -299,16 +299,14 @@ body.working .work { display: grid; }
 .tab { border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); transition: background .2s, color .2s; }
 .tab.on { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow); }
 .tabs .hint { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
-.view { flex: 1; overflow: auto; padding: 14px; min-height: 0; }
-.page { position: relative; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); background: #fff; }
+/* All pages of the document, one under the other, in one scroll. */
+.view { flex: 1; overflow: auto; padding: 14px; min-height: 0; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.page { position: relative; flex: none; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); background: #fff; scroll-margin-top: 14px; }
 .page img { display: block; width: 100%; height: auto; cursor: zoom-in; animation: fadein .35s var(--ease); }
-/* Unzoomed, the whole page fits the column's height; click to zoom and scroll. */
-@media (min-width: 1181px) {
-  .view:not(.zoom) { display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
-  .view:not(.zoom) .page { height: 100%; max-width: 100%; aspect-ratio: 210 / 297; }
-  .view:not(.zoom) .page img { height: 100%; object-fit: contain; }
-}
+.page .no { position: absolute; top: 8px; right: 8px; font: 600 11px/1 var(--body); color: var(--ink-2); background: color-mix(in srgb, var(--sheet) 88%, transparent); padding: 5px 7px; border-radius: 5px; box-shadow: var(--shadow); }
+.page .ph { aspect-ratio: 210 / 297; }
 @keyframes fadein { from { opacity: 0; } }
+.view.zoom { align-items: flex-start; }
 .view.zoom .page { width: 220%; }
 .view.zoom img { cursor: zoom-out; }
 .page.scanning::after {
@@ -317,7 +315,8 @@ body.working .work { display: grid; }
   animation: pass 2.2s var(--ease) infinite;
 }
 @keyframes pass { from { transform: translateY(-100%); } to { transform: translateY(460%); } }
-.view .ph { height: 100%; display: grid; place-items: center; color: var(--ink-3); font-size: 13px; text-align: center; padding: 20px; }
+.view > .ph { flex: 1; }
+.ph { height: 100%; display: grid; place-items: center; color: var(--ink-3); font-size: 13px; text-align: center; padding: 20px; }
 kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); }
 
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
@@ -496,7 +495,7 @@ const tokens = u => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_re
 
 $("origin").textContent = location.origin.startsWith("http") ? location.origin : "https://ld-docs.etiam.si";
 
-let docs = [], sel = 0, page = 0, running = false, session = 0, startedAt = 0, finishedAt = 0;
+let docs = [], sel = 0, running = false, session = 0, startedAt = 0, finishedAt = 0;
 let phase = "upload", up = { sent: 0, total: 0 }, splitting = { done: 0, total: 0 }, parallel = 6, follow = true;
 const sources = new Map();   // page name (as the API reports it) -> () => Promise<blob url | null>
 const rendered = new Map();
@@ -607,7 +606,7 @@ async function start(files) {
   const mine = ++session;
   running = true; startedAt = performance.now(); finishedAt = 0;
   phase = "upload"; up = { sent: 0, total: files.reduce((n, f) => n + f.size, 0) }; splitting = { done: 0, total: 0 };
-  docs = []; sel = 0; page = 0; follow = true;
+  docs = []; sel = 0; follow = true;
   revealed.clear(); lastMirror = lastScan = ""; $("list").innerHTML = "";
   transition(() => {
     document.body.classList.add("working");
@@ -648,7 +647,7 @@ async function start(files) {
 function followActive() {
   const active = docs.findIndex(d => d.status === "pending" && d.stage && d.stage !== "queued");
   const next = active >= 0 ? active : docs.findIndex(d => d.status === "pending");
-  if (next >= 0 && next !== sel) { sel = next; page = 0; }
+  if (next >= 0 && next !== sel) { sel = next; }
 }
 
 let ticking = false;
@@ -782,7 +781,7 @@ $("list").addEventListener("click", e => {
 function select(i) {
   if (i < 0 || i >= docs.length || i === sel) return;
   follow = false;
-  transition(() => { sel = i; page = 0; render(); });
+  transition(() => { sel = i; render(); });
   requestAnimationFrame(() => $("list").querySelector(".sel")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
 }
 
@@ -905,29 +904,50 @@ let scanToken = 0;
 async function renderScan() {
   const d = docs[sel];
   const pages = d?.pages || [];
-  if (follow && d?.status === "pending" && (d.stage === "page1" || d.stage === "page2")) page = d.stage === "page2" ? 1 : 0;
-  const name = pages[page];
+  const reading = d?.status === "pending" && (d.stage === "page1" || d.stage === "page2") ? (d.stage === "page2" ? 1 : 0) : -1;
   const pending = d?.status === "pending" && READING.has(d.stage);
-  const sig = `${sel}|${page}|${name}|${pending}|${sources.has(name)}`;
+  const doc = `${sel}|${pages.join("|")}`;
+  const sig = `${doc}|${pending}|${reading}|${pages.map(n => sources.has(n)).join("")}`;
   if (sig === lastScan) return;
+  const sameDoc = lastScan.startsWith(doc + "|");
   lastScan = sig;
-  $("tabs").innerHTML = pages.slice(0, 2).map((p, i) => `<button class="tab ${i === page ? "on" : ""}" data-p="${i}">Stran ${i + 1}</button>`).join("")
-    + `<span class="hint"><kbd>j</kbd> <kbd>k</kbd> dokumenti · <kbd>1</kbd> <kbd>2</kbd> strani</span>`;
+  $("tabs").innerHTML = pages.map((p, i) => `<button class="tab" data-p="${i}">Stran ${i + 1}</button>`).join("")
+    + `<span class="hint"><kbd>j</kbd> <kbd>k</kbd> dokumenti</span>`;
   const view = $("view");
   const token = ++scanToken;
-  if (!name || !sources.has(name)) { view.innerHTML = `<div class="ph">${name ? "Pripravljam predogled …" : ""}</div>`; return; }
-  if (!rendered.has(name)) {
-    view.innerHTML = `<div class="ph">Pripravljam predogled …</div>`;
-    rendered.set(name, await sources.get(name)().catch(() => null));
-  }
+  if (!pages.length) { view.innerHTML = ""; return; }
+  const urls = await Promise.all(pages.map(async name => {
+    if (!sources.has(name)) return undefined;
+    if (!rendered.has(name)) rendered.set(name, await sources.get(name)().catch(() => null));
+    return rendered.get(name);
+  }));
   if (token !== scanToken) return;
-  const url = rendered.get(name);
-  view.innerHTML = url ? `<div class="page ${pending ? "scanning" : ""}"><img src="${url}" alt="Sken: ${esc(name)}"></div>` : `<div class="ph">Predogled ni na voljo za to datoteko.</div>`;
+  const top = view.scrollTop;
+  view.innerHTML = pages.map((name, i) => `<div class="page ${pending && (reading < 0 || reading === i) ? "scanning" : ""}" id="pg${i}">${
+    urls[i] ? `<img src="${urls[i]}" alt="Sken: ${esc(name)}">` : `<div class="ph">${urls[i] === null ? "Predogled ni na voljo za to datoteko." : "Pripravljam predogled …"}</div>`
+  }<span class="no">${i + 1} / ${pages.length}</span></div>`).join("");
+  view.style.scrollBehavior = "auto";
+  view.scrollTop = sameDoc ? top : 0;
+  view.style.scrollBehavior = "";
+  if (follow && reading >= 0) showPage(reading);
+  markPage();
 }
 
+// The tab of the page that fills the top third of the view is lit while scrolling.
+function markPage() {
+  const view = $("view"), line = view.getBoundingClientRect().top + view.clientHeight / 3;
+  const els = [...view.querySelectorAll(".page")];
+  let on = 0;
+  els.forEach((el, i) => { if (el.getBoundingClientRect().top <= line) on = i; });
+  if (view.scrollTop + view.clientHeight >= view.scrollHeight - 4) on = els.length - 1;
+  $("tabs").querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("on", i === on));
+}
+function showPage(i) { $("pg" + i)?.scrollIntoView({ block: "start" }); }
+
+$("view").addEventListener("scroll", () => requestAnimationFrame(markPage), { passive: true });
 $("tabs").addEventListener("click", e => {
   const t = e.target.closest(".tab");
-  if (t && +t.dataset.p !== page) { page = +t.dataset.p; renderScan(); }
+  if (t) showPage(+t.dataset.p);
 });
 $("view").addEventListener("click", e => { if (e.target.tagName === "IMG") $("view").classList.toggle("zoom"); });
 
@@ -935,7 +955,7 @@ document.addEventListener("keydown", e => {
   if (e.target.matches("input, textarea") || !document.body.classList.contains("working")) return;
   if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); select(sel + 1); }
   if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); select(sel - 1); }
-  if ((e.key === "1" || e.key === "2") && +e.key - 1 !== page) { page = +e.key - 1; renderScan(); }
+  if (/^[1-9]$/.test(e.key)) showPage(+e.key - 1);
 });
 
 $("dl").addEventListener("click", () => {
