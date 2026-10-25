@@ -270,6 +270,35 @@ body.working .work { display: grid; }
 .f.diff .l { color: var(--amber); }
 .metrics.other { margin-top: -14px; }
 .metrics.other .err { color: var(--err); font: 600 12.5px var(--body); }
+/* comparison: both readings side by side */
+.cmpbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+.cmpbar .sum { font-size: 14px; color: var(--ink-2); }
+.cmpbar .sum b { color: var(--amber); font-variant-numeric: tabular-nums; }
+.cmpbar .sum b.ok { color: var(--ok); }
+.cmpbar .tools { display: flex; align-items: center; gap: 14px; }
+.only { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; user-select: none; }
+.only input { accent-color: var(--amber); width: 15px; height: 15px; margin: 0; }
+table.cmp { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cmp thead th { position: sticky; top: -24px; z-index: 1; background: var(--sheet); text-align: left; padding: 10px 12px; border-bottom: 1.5px solid var(--ink); }
+.cmp thead th b { display: block; font: 700 14px var(--display); font-stretch: 108%; }
+.cmp thead th small { display: block; font: 400 11.5px var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp col.k { width: 27%; } .cmp col.mk { width: 34px; }
+.cmp .grp td { padding: 18px 12px 6px; }
+.cmp tbody tr:not(.grp) > * { padding: 9px 12px; border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent); vertical-align: middle; }
+.cmp tbody th { text-align: left; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.cmp td .cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.cv { font: 500 15px var(--mono); overflow-wrap: anywhere; }
+.cv.none { font: 400 13px var(--body); color: var(--dot); }
+.cmp tr.diff > * { background: color-mix(in srgb, var(--hl) 24%, var(--sheet)); }
+.cmp tr.diff th { color: var(--ink); box-shadow: inset 3px 0 0 var(--amber); }
+.cmp tr.diff .cv:not(.none) { font-weight: 650; }
+.cmp .mk { text-align: center; font: 700 15px var(--mono); color: var(--amber); }
+.cmp tr:not(.diff) .mk { color: var(--ok); font-weight: 500; opacity: .6; }
+.cmp .alldone td { padding: 28px 12px; text-align: center; color: var(--ok); font-weight: 600; }
+.cmpnotes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
+.cmpnotes .notes { margin-top: 0; }
+.cmpnotes .label { display: block; margin-bottom: 6px; }
+@media (max-width: 760px) { .cmpnotes { grid-template-columns: 1fr; } .cmp col.k { width: 34%; } }
 .notes { margin-top: 24px; padding: 14px 16px; border-left: 3px solid var(--hl); background: color-mix(in srgb, var(--hl) 16%, transparent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
 .notes p { margin: 0 0 6px; } .notes p:last-child { margin: 0; }
 .notes .warn { color: var(--err); font-weight: 600; }
@@ -720,6 +749,15 @@ const conf = (d, k) => (d.confidence || {})[k];
 const needsCheck = (d, k) => (d.uncertain_fields || []).includes(k) || (typeof conf(d, k) === "number" && conf(d, k) < CHECK_BELOW);
 const checkCount = d => d.status === "done" ? Object.keys(d.confidence || {}).filter(k => needsCheck(d, k)).length : 0;
 const docKey = d => (d.pages || []).join("|");
+// Every field in form order, for the side-by-side table.
+const GROUPS = [
+  ["Glava", [["case_number", "Zadeva"], ["documentation_number", "Št. dokumentacije"], ["beneficiary_number", "Št. upravičenca"], ["document_id", "ID dokumenta · QR"], ["vk", "VK · QR"]]],
+  ["Stran 1", [["other_country", "Pokojnina iz druge države"]]],
+  ...[1, 2, 3].map(i => [`Stran 1 · vrstica ${i}`, [[`amount${i}`, "Znesek"], [`currency${i}`, "Valuta"], [`country${i}`, "Država"]]]),
+  ["Stran 2", [["amount", "Znesek"], ["currency", "Valuta"], ["country", "Država"], ["signature_present", "Podpis"]]],
+];
+let cmpView = "side", onlyDiff = false;  // a comparison opens side by side; the form is one click away
+try { cmpView = localStorage.getItem("ld-cmp-view") || "side"; onlyDiff = localStorage.getItem("ld-cmp-only") === "1"; } catch {}
 const differs = (d, k) => ((d.compare || {}).differences || []).includes(k);
 const diffCount = d => d.status === "done" ? ((d.compare || {}).differences || []).length : 0;
 function plain(k, v) {
@@ -913,7 +951,7 @@ function renderMirror() {
   const d = docs[sel];
   if (!d) { m.dataset.view = ""; m.innerHTML = ""; return; }
   if (d.status === "pending") return reading(d);
-  const sig = sel + JSON.stringify(d);
+  const sig = sel + cmpView + onlyDiff + JSON.stringify(d);
   if (sig === lastMirror && m.dataset.view === "doc") return;
   lastMirror = sig;
   m.dataset.view = "doc";
@@ -934,13 +972,50 @@ function renderMirror() {
       <div><b>${nf(tokens(u))}</b><span>žetonov · ${nf(u.input_tokens + u.cache_read_tokens + u.cache_write_tokens)} vhod, ${nf(u.output_tokens)} izhod</span></div>
       <div class="cost"><b>${usd(u.cost_usd || 0)}</b><span>po ceni API</span></div></div>` : "";
   const c = d.compare, cu = (c && c.result && c.result.usage) || {};
-  const other = !c ? "" : c.error
+  let other = !c ? "" : c.error
     ? `<div class="metrics other"><span class="err">${c.reader === "claude" ? "Claude" : "Lokalni bralnik"} ni prebral: ${esc(c.error)}</span></div>`
     : `<div class="metrics other" title="Drugo branje istega dokumenta. Polja, kjer se razlikuje, so označena spodaj.">
       <div><b>${c.reader === "claude" ? "Claude" : "lokalno"}</b><span>${esc(c.result.model || "")}</span></div>
       <div><b>${secs(cu.duration_ms || 0)}</b><span>branje</span></div>
       <div><b>${c.differences.length}</b><span>${c.differences.length === 1 ? "razlika" : "razlik"}</span></div>
       <div class="cost"><b>${usd(cu.cost_usd || 0)}</b><span>po ceni API</span></div></div>`;
+  if (c && c.result) {
+    const n = c.differences.length;
+    const bar = `<div class="cmpbar">
+      <span class="sum">${n ? `<b>${n}</b> ${n === 1 ? "polje se razlikuje" : n === 2 ? "polji se razlikujeta" : n < 5 ? "polja se razlikujejo" : "polj se razlikuje"}` : `<b class="ok">Vsa polja enaka</b>`}</span>
+      <span class="tools">
+        ${cmpView === "side" ? `<label class="only"><input type="checkbox" data-cmp="only" ${onlyDiff ? "checked" : ""}> Samo razlike</label>` : ""}
+        <span class="seg" role="group" aria-label="Pogled"><button data-cmp="side" aria-pressed="${cmpView === "side"}">Vzporedno</button><button data-cmp="form" aria-pressed="${cmpView === "form"}">Obrazec</button></span>
+      </span></div>`;
+    if (cmpView === "side") {
+      const [a, b] = c.reader === "claude" ? [d, c.result] : [c.result, d];  // local left, Claude right
+      const cell = (r, k) => `<div class="cell"><span class="cv ${r[k] === null || r[k] === undefined ? "none" : ""}">${esc(plain(k, r[k]))}</span>${signal(r, k)}</div>`;
+      const body = GROUPS.map(([title, fields]) => {
+        const rows = fields.filter(([k]) => !onlyDiff || differs(d, k)).map(([k, label]) => {
+          const diff = differs(d, k);
+          return `<tr class="${diff ? "diff" : ""}"><th>${label}</th><td>${cell(a, k)}</td><td>${cell(b, k)}</td><td class="mk" title="${diff ? "Razlika" : "Enako"}">${diff ? "≠" : "="}</td></tr>`;
+        }).join("");
+        return rows ? `<tbody><tr class="grp"><td colspan="4" class="label">${title}</td></tr>${rows}</tbody>` : "";
+      }).join("") || `<tbody><tr class="alldone"><td colspan="4">Lokalno in Claude sta prebrala vsa polja enako.</td></tr></tbody>`;
+      const noteOf = r => [r.notes && `<p>${esc(r.notes)}</p>`, ...(r.warnings || []).map(w => `<p class="warn">${esc(w)}</p>`)].filter(Boolean).join("");
+      m.innerHTML = `<article class="sheet ${reveal ? "reveal" : ""}">
+        ${metrics}${other}${bar}
+        <table class="cmp">
+          <colgroup><col class="k"><col><col><col class="mk"></colgroup>
+          <thead><tr><th></th><th><b>Lokalno</b><small>${esc(a.model || "")}</small></th><th><b>Claude</b><small>${esc(b.model || "")}</small></th><th></th></tr></thead>
+          ${body}
+        </table>
+        <div class="cmpnotes">
+          <div class="notes"><span class="label">Opombe · lokalno</span>${noteOf(a) || "<p>brez opomb</p>"}</div>
+          <div class="notes"><span class="label">Opombe · Claude</span>${noteOf(b) || "<p>brez opomb</p>"}</div>
+        </div>
+        <div class="meta"><span>${esc((d.pages || []).join(" + "))}</span></div>
+      </article>`;
+      if (reveal) $("mirror").scrollTo({ top: 0 });
+      return;
+    }
+    other += bar;
+  }
   const rows = [1, 2, 3].map(i => {
     const keys = [`amount${i}`, `currency${i}`, `country${i}`];
     if (keys.every(k => d[k] === null && !needsCheck(d, k) && !differs(d, k))) {
@@ -1027,6 +1102,14 @@ $("view").addEventListener("scroll", () => requestAnimationFrame(markPage), { pa
 $("tabs").addEventListener("click", e => {
   const t = e.target.closest(".tab");
   if (t) showPage(+t.dataset.p);
+});
+$("mirror").addEventListener("click", e => {
+  const t = e.target.closest("[data-cmp]");
+  if (!t) return;
+  if (t.dataset.cmp === "only") onlyDiff = t.checked;
+  else cmpView = t.dataset.cmp;
+  try { localStorage.setItem("ld-cmp-view", cmpView); localStorage.setItem("ld-cmp-only", onlyDiff ? "1" : "0"); } catch {}
+  renderMirror();
 });
 $("view").addEventListener("click", e => { if (e.target.tagName === "IMG") $("view").classList.toggle("zoom"); });
 
