@@ -1,9 +1,11 @@
-"""One document (page 1 + page 2) -> the JSON ZPIZ asked for, read by Claude through claude-pool.
+"""One document (page 1 + page 2) -> the JSON ZPIZ asked for.
 
-Each document is one `claude -p` run in its own temp dir. It may only Read ./p1.png and ./p2.png
-and has to answer in SCHEMA (--json-schema).
+Read either by the local reader (READER_URL set: reader/ on a GPU machine, see README "Local reader")
+or by Claude through claude-pool: then each document is one `claude -p` run in its own temp dir that
+may only Read ./p1.png and ./p2.png and has to answer in SCHEMA (--json-schema).
 """
 import asyncio
+import io
 import json
 import os
 import shutil
@@ -11,10 +13,14 @@ import tempfile
 import time
 from pathlib import Path
 
+import httpx
+
 from .pages import Document
 
 MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
 TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "300"))
+READER_URL = os.environ.get("READER_URL", "").rstrip("/")
+READER_KEY = os.environ.get("READER_KEY", "")
 PROMPT = (Path(__file__).parent / "prompt.md").read_text()
 IMAGE_MAX_SIDE = 2000
 EXIT_EXHAUSTED = 75  # claude-pool: every account is at its usage limit
@@ -47,7 +53,7 @@ SCHEMA = {
 
 # Batches share MAX_PARALLEL claude runs; single calls have their own slots, so they never queue behind a batch
 # (Cloudflare drops a request after ~100 s of silence).
-BATCH_PARALLEL = int(os.environ.get("MAX_PARALLEL", "6"))
+BATCH_PARALLEL = int(os.environ.get("MAX_PARALLEL", "3" if READER_URL else "6"))  # the local reader reads 2 at a time
 BATCH_SLOTS = asyncio.Semaphore(BATCH_PARALLEL)
 SINGLE_SLOTS = asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL_SINGLE", "4")))
 
@@ -174,6 +180,37 @@ async def run_claude(workdir: str, files: list[str], progress=no_progress) -> tu
     return out["structured_output"], model, usage_of(out)
 
 
+def page_png(page) -> bytes:
+    """A page for the local reader: full resolution, lossless (1-bit scans stay 1-bit, so ~100 KB)."""
+    buf = io.BytesIO()
+    im = page.image if page.image.mode in ("1", "L") else page.image.convert("L")
+    im.save(buf, format="PNG", optimize=False, compress_level=3)
+    return buf.getvalue()
+
+
+async def run_local(doc: Document, progress=no_progress) -> dict:
+    """One document through the local reader (reader/ on the GPU machine, behind a Cloudflare Tunnel)."""
+    progress("preparing")
+    files = [("files", (f"p{i}.png", await asyncio.to_thread(page_png, p), "image/png")) for i, p in enumerate(doc.pages[:2], 1)]
+    progress("reading")
+    last = None
+    for attempt in range(2):  # one retry: the tunnel or the laptop can blink
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT, connect=15)) as c:
+                r = await c.post(f"{READER_URL}/v1/read", files=files, headers={"Authorization": f"Bearer {READER_KEY}"})
+            if r.status_code == 200:
+                return r.json()
+            last = f"reader answered {r.status_code}: {r.text[:300]}"
+            if r.status_code < 500:
+                break
+        except httpx.HTTPError as e:
+            last = f"reader unreachable ({type(e).__name__}: {e})"
+        if attempt == 0:
+            progress("retrying")
+            await asyncio.sleep(2)
+    raise ExtractError(last or "reader failed", exhausted=last is not None and "unreachable" in last)
+
+
 def write_pngs(doc: Document, tmp: str) -> list[str]:
     files = []
     for i, page in enumerate(doc.pages[:2], 1):
@@ -184,8 +221,54 @@ def write_pngs(doc: Document, tmp: str) -> list[str]:
     return files
 
 
+def doc_warnings(doc: Document) -> list[str]:
+    warnings = []
+    if not doc.qr:
+        warnings.append("no QR code found on page 1: document_id and vk are missing")
+    if len(doc.pages) < 2:
+        warnings.append("page 2 is missing: amount, currency, country and signature_present are null")
+    if len(doc.pages) > 2:
+        warnings.append(f"{len(doc.pages)} pages, only the first two were read")
+    return warnings
+
+
+async def extract_local(doc: Document, progress=no_progress) -> dict:
+    started = time.monotonic()
+    raw = await run_local(doc, progress)
+    qr = doc.qr or {}
+    warnings = doc_warnings(doc) + list(raw.get("warnings") or [])
+    margin = raw.get("margin") or {}
+    for k in ("document_id", "vk"):  # the QR code is exact; the margin text is OCR, so it only warns
+        if qr.get(k) and margin.get(k) and margin[k] != qr[k]:
+            warnings.append(f"{k} in the QR code ({qr[k]}) differs from the margin text ({margin[k]})")
+    conf = raw.get("confidence") or {}
+    qr_conf = 1.0 if qr else None
+    data = {k: raw.get(k) for k in FIELDS}
+    return {
+        "case_number": data.pop("case_number"),
+        "document_id": qr.get("document_id"),
+        "vk": qr.get("vk"),
+        **data,
+        "country_code": raw.get("country_code"),
+        "confidence": {"case_number": conf.get("case_number"), "document_id": qr_conf, "vk": qr_conf}
+        | {k: conf.get(k) for k in FIELDS if k != "case_number"},
+        "uncertain_fields": [f for f in raw.get("uncertain_fields") or [] if f in FIELDS],
+        "notes": raw.get("notes") or None,
+        "warnings": warnings,
+        "pages": [p.name for p in doc.pages],
+        "model": raw.get("model") or "local",
+        "usage": {
+            "duration_ms": round((time.monotonic() - started) * 1000),
+            "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0, "cost_usd": 0.0,
+        },  # fmt: skip
+    }
+
+
 async def extract(doc: Document, batch: bool = False, progress=no_progress) -> dict:
     """The flat result: link to the case first, then ZPIZ's 14 fields, then what to double-check."""
+    if READER_URL:
+        async with BATCH_SLOTS if batch else SINGLE_SLOTS:
+            return await extract_local(doc, progress)
     async with BATCH_SLOTS if batch else SINGLE_SLOTS:
         started = time.monotonic()  # after the queue: this is how long reading took, not waiting
         progress("preparing")
@@ -201,13 +284,7 @@ async def extract(doc: Document, batch: bool = False, progress=no_progress) -> d
         usage = {"duration_ms": round((time.monotonic() - started) * 1000), **usage}
     data = clean(raw)
     qr = doc.qr or {}
-    warnings = []
-    if not qr:
-        warnings.append("no QR code found on page 1: document_id and vk are missing")
-    if len(doc.pages) < 2:
-        warnings.append("page 2 is missing: amount, currency, country and signature_present are null")
-    if len(doc.pages) > 2:
-        warnings.append(f"{len(doc.pages)} pages, only the first two were read")
+    warnings = doc_warnings(doc)
     conf = raw.get("confidence") or {}
     conf = {k: round(min(max(float(conf[k]), 0.0), 1.0), 2) if isinstance(conf.get(k), (int, float)) else None for k in FIELDS}
     qr_conf = 1.0 if qr else None  # read from the QR code, not guessed

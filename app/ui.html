@@ -467,7 +467,7 @@ const CURRENCIES = ["EUR", "BAM", "HRK", "RSD", "MKD", "CHF", "AUD"];
 const COUNTRIES = ["D", "A", "I", "CH", "AUS", "HR", "BIH", "SRB", "MN", "MA"];
 const CHECK_BELOW = 0.9;
 // The real stages the server reports for a document (GET /v1/batch/{id}), in order.
-const STAGES = [
+const CLAUDE_STAGES = [
   ["queued", "Čaka na prosto mesto"],
   ["preparing", "Pripravljam sliki strani"],
   ["starting", "Zaganjam branje"],
@@ -476,8 +476,17 @@ const STAGES = [
   ["thinking", "Claude primerja polja s skenom"],
   ["writing", "Claude zapisuje polja"],
 ];
-const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "zaganja", retrying: "ponovno", page1: "stran 1", page2: "stran 2", thinking: "primerja", writing: "zapisuje" };
-const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing"]);
+// The local reader (READER_URL on the server) reads a document in one step of a few seconds.
+const LOCAL_STAGES = [
+  ["queued", "Čaka na prosto mesto"],
+  ["preparing", "Pripravljam sliki strani"],
+  ["reading", "Berem lokalno: oznake, števke, rokopis"],
+];
+let LOCAL = false;  // from GET /health
+let STAGES = CLAUDE_STAGES;
+fetch("/health").then(r => r.json()).then(h => { LOCAL = h.reader === "local"; STAGES = LOCAL ? LOCAL_STAGES : CLAUDE_STAGES; }).catch(() => {});
+const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "zaganja", retrying: "ponovno", page1: "stran 1", page2: "stran 2", thinking: "primerja", writing: "zapisuje", reading: "bere" };
+const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing", "reading"]);
 const MB = b => nf(b / 1048576, 1);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const nf = (v, d = 0) => v.toLocaleString("sl-SI", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -731,8 +740,9 @@ function render() {
     : `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${errors ? `<span><b>${errors}</b> napak</span>` : ""}${eta}`;
   const tok = done.reduce((n, d) => n + tokens(d.usage || {}), 0);
   $("totals").innerHTML = `<div><b>${done.length ? secs(sum("duration_ms") / done.length) : "–"}</b><span>na dokument</span></div>`
-    + `<div><b>${done.length ? nf(tok) : "–"}</b><span>žetonov</span></div>`
-    + `<div><b>${done.length ? usd(sum("cost_usd")) : "–"}</b><span>po ceni API</span></div>`;
+    + (LOCAL ? `<div><b>${done.length}</b><span>prebranih</span></div><div><b>0 $</b><span>lokalno</span></div>`
+      : `<div><b>${done.length ? nf(tok) : "–"}</b><span>žetonov</span></div>`
+      + `<div><b>${done.length ? usd(sum("cost_usd")) : "–"}</b><span>po ceni API</span></div>`);
   $("dl").disabled = !done.length || running;
   renderList();
   renderMirror();
@@ -799,7 +809,7 @@ function reading(d) {
       <div class="skel"><span></span><span></span><span></span><span></span><span></span></div>
     </div>`;
   }
-  const stage = d.stage === "retrying" ? "starting" : d.stage || "queued";
+  const stage = d.stage === "retrying" ? (LOCAL ? "reading" : "starting") : d.stage || "queued";
   const now = STAGES.findIndex(([k]) => k === stage);
   m.querySelectorAll(".steps li").forEach((li, i) => {
     const k = li.dataset.k;
@@ -845,7 +855,11 @@ function renderMirror() {
   const reveal = !revealed.has(docKey(d));
   revealed.add(docKey(d));
   const u = d.usage || {};
-  const metrics = d.usage ? `<div class="metrics" title="Cena je izračunana po ceniku Anthropic API. Prek claude-pool se plača naročnina, ne ta znesek.">
+  const metrics = d.usage && String(d.model || "").startsWith("local") ? `<div class="metrics" title="Prebrano lokalno, brez zunanjega API.">
+      <div><b>${secs(u.duration_ms || 0)}</b><span>branje</span></div>
+      <div><b>lokalno</b><span>${esc(String(d.model).replace(/^local \(|\)$/g, ""))}</span></div>
+      <div class="cost"><b>0 $</b><span>brez API</span></div></div>`
+    : d.usage ? `<div class="metrics" title="Cena je izračunana po ceniku Anthropic API. Prek claude-pool se plača naročnina, ne ta znesek.">
       <div><b>${secs(u.duration_ms || 0)}</b><span>branje</span></div>
       <div><b>${nf(tokens(u))}</b><span>žetonov · ${nf(u.input_tokens + u.cache_read_tokens + u.cache_write_tokens)} vhod, ${nf(u.output_tokens)} izhod</span></div>
       <div class="cost"><b>${usd(u.cost_usd || 0)}</b><span>po ceni API</span></div></div>` : "";

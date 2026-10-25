@@ -79,6 +79,88 @@ curl -H "Authorization: Bearer $KEY" https://ld-docs.etiam.si/v1/batch/3f2a…
 
 Results are kept for `JOB_TTL_DAYS` (7), then deleted, because they hold personal data.
 
+## Local reader (no Claude, no per-document cost)
+With `READER_URL` set, the API sends each document to `reader/` instead of Claude: a service on a machine with
+an NVIDIA GPU (a laptop with an RTX 4080 12 GB is enough), reached through a Cloudflare Tunnel. The API, the
+upload page and the JSON stay the same; `model` says `local (…)` and `usage.cost_usd` is 0.
+
+How it reads a document, in any language and any version of the form. Nothing is placed by fixed coordinates:
+- **Layout** (`layout.py`, `page1.py`, `page2.py`): the page is straightened, checkboxes are found by shape, dotted
+  digit cells from their dots, writing lines from their strokes. Rows are told apart by the codes printed next to
+  the boxes (read with Tesseract, `labels.py`), so a new currency list or order is read, not assumed. The three
+  blocks on page 1 repeat the same rows, so a box hidden under a heavy mark is put back from the others.
+- **Ticks** (`marks.py`): measured as ink inside the box. Two ticks, a blacked-out box or a stray stroke are reported,
+  never guessed.
+- **Header** (`header.py`): the case number by its shape, checked against the sideways copy in the margin; the
+  beneficiary number usually contains the documentation number, which confirms both.
+- **Amounts** (`digits.py`, `amount.py`): a small CNN reads each cell, the vision model reads the whole row; they
+  have to agree.
+- **Page 2 handwriting** (`handwriting.py`, `names.py`, `vlm.py`): Qwen3-VL 8B (Ollama, ~6 GB of GPU memory) reads
+  the currency and the country, then picks among the closest real names from every language in CLDR. The currency
+  has to be one the country used. Empty fields are measured empty and never shown to the model.
+- **Confidence** comes from agreement and cross-checks, not from a model's own estimate: anything below 0.9 is in
+  `uncertain_fields` with a reason in `notes` (in Slovenian). On ZPIZ's 51 sample documents: see "Accuracy" below.
+
+### Run it on the GPU machine
+```bash
+# once: NVIDIA driver + Docker with GPU support (WSL: Docker Desktop or the NVIDIA Container Toolkit)
+docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi   # must list the GPU
+cp reader/.env.example reader/.env       # READER_KEYS, TUNNEL_TOKEN
+docker compose -f reader/compose.yml up -d --build   # first start pulls the model (6 GB)
+```
+`reader/.env` (mode 600, never committed):
+
+| Variable | |
+|---|---|
+| `READER_KEYS` | comma-separated keys the API must send (`Authorization: Bearer …`); generate with `openssl rand -hex 32` |
+| `TUNNEL_TOKEN` | the Cloudflare Tunnel's token (Zero Trust → Networks → Tunnels → create → Docker); its public hostname (e.g. `ld-reader.etiam.si`) points to `http://reader:8100` |
+| `VLM_MODEL` | optional, default `qwen3-vl:8b-instruct` |
+| `READER_PARALLEL` | optional, documents read at once, default 2 |
+
+Nothing listens on the machine's own network: the tunnel is the only way in, and every call needs a key.
+On the server, set `READER_URL=https://ld-reader.etiam.si` and `READER_KEY=<one of READER_KEYS>` in
+`/srv/ld-docs/.env` and restart. Without `READER_URL` the API uses Claude as before.
+If the reader is down, `/v1/extract` answers 503 and batch documents get `status: error`; send them again later.
+
+### Check accuracy on scans
+```bash
+# reference: a /v1/batch result for the same scans (e.g. from the Claude version), saved as results/ref.json
+docker run --rm --network host -v "$PWD:/w" -w /w -e PYTHONPATH=/w ld-reader:dev \
+  python -m reader.evaluate ld_test results/ref.json --out results/local.json
+```
+It prints every difference and, most important, the fields that were **wrong while claiming ≥ 0.9** (exit code 1 if
+any). Run it after any change to `reader/` and on new kinds of scans before trusting them.
+
+### Accuracy
+ZPIZ's 51 sample documents (102 pages, Swedish, English, German, French, Italian, Serbian, Croatian, Macedonian,
+Slovenian forms of 2021 and 2023), compared field by field with the Claude version's answers; the digit model
+used is the public one, which never saw these scans:
+
+| | |
+|---|---|
+| fields agreeing with the reference | 857 / 867 (98.8 %) |
+| **wrong while claiming ≥ 0.9** | **0** |
+| sent to a person (< 0.9) | 56 fields (6.5 %): mostly amounts, see below |
+| checkboxes (currency, country, yes/no), header numbers, signature, page 2 currency/country | all agree; the doubtful ones flagged |
+| time per document | 4–15 s on an RTX 4080 Laptop (12 GB) |
+
+Every one of the 10 disagreements is a handwritten amount that was flagged (e.g. a final `2` written like a
+reversed C, a `3` like a J). Amounts are flagged often on purpose: a digit counts as sure only when the CNN and the
+vision model read the same and the CNN is at full certainty for every digit (`CELL_SURE` in `amount.py`). Real-cell
+accuracy of the digit CNN alone is 96.7 % (public model), 97.3 % cross-validated after fine-tuning on these scans.
+Loosen `CELL_SURE` only after `reader.evaluate` on more checked scans says it is safe.
+
+### Digit model
+`reader/models/digits.onnx` is trained on MNIST + EMNIST only (public data), augmented to look like pen digits cut
+out of the cells, so it can sit in this public repo:
+`docker build -t ld-train -f reader/training/Dockerfile . && docker run --rm -v "$PWD:/w" -v digitdata:/tmp/digit-data -w /w ld-train python -m reader.training.train_digits` (~30 min on a CPU).
+On the GPU machine it can then learn the local handwriting from checked scans, into the git-ignored
+`reader/models/digits.local.onnx`, which the reader prefers when present:
+```bash
+python -m reader.training.cells_from_scans ld_test results/ref.json results/cells.npz   # in ld-reader:dev
+python -m reader.training.finetune_digits results/cells.npz                             # in ld-train, prints cross-validated accuracy
+```
+
 ## Configuration (`/srv/ld-docs/.env` on the server)
 | Variable | Default | |
 |---|---|---|
@@ -87,6 +169,8 @@ Results are kept for `JOB_TTL_DAYS` (7), then deleted, because they hold persona
 | `MAX_PARALLEL` | `6` | batch documents read at once (each claude run uses ~300 MB RAM) |
 | `MAX_PARALLEL_SINGLE` | `4` | `/v1/extract` runs at once, on their own slots so they never wait behind a batch (Cloudflare cuts a request after ~100 s) |
 | `JOB_TTL_DAYS` | `7` | |
+| `READER_URL` | (none: Claude reads) | the local reader, e.g. `https://ld-reader.etiam.si` (see "Local reader"); `MAX_PARALLEL` then defaults to 3 |
+| `READER_KEY` | | one of the reader's `READER_KEYS` |
 
 ## Development
 ```bash

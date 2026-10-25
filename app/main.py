@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .extract import BATCH_PARALLEL, ExtractError, extract
+from .extract import BATCH_PARALLEL, READER_URL, ExtractError, extract
 from .pages import group, load_pages, unpack
 
 API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]
@@ -63,7 +63,7 @@ def ui():
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "reader": "local" if READER_URL else "claude"}
 
 
 @app.post("/v1/extract", dependencies=[Depends(auth)])
