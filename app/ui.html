@@ -131,7 +131,14 @@ a { color: var(--pen); }
 .btn:disabled { opacity: .45; cursor: default; }
 
 /* ---------- work screen ---------- */
-.work { display: none; grid-template-columns: 290px minmax(600px, 1.35fr) minmax(300px, .75fr); height: calc(100vh - 67px); }
+.work { display: none; grid-template-columns: 290px minmax(600px, 1.35fr) minmax(300px, .75fr); }
+/* The work screen is exactly one screen tall: the header takes what it needs, the three columns get the
+   rest and scroll on their own, so the page itself never scrolls. */
+@media (min-width: 1181px) {
+  body.working { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body.working .top { flex: none; }
+  body.working .work { flex: 1; min-height: 0; }
+}
 .screen-enter { animation: enter .45s var(--ease) both; }
 @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
 body.working .intake { display: none; }
@@ -295,6 +302,12 @@ body.working .work { display: grid; }
 .view { flex: 1; overflow: auto; padding: 14px; min-height: 0; }
 .page { position: relative; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); background: #fff; }
 .page img { display: block; width: 100%; height: auto; cursor: zoom-in; animation: fadein .35s var(--ease); }
+/* Unzoomed, the whole page fits the column's height; click to zoom and scroll. */
+@media (min-width: 1181px) {
+  .view:not(.zoom) { display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
+  .view:not(.zoom) .page { height: 100%; max-width: 100%; aspect-ratio: 210 / 297; }
+  .view:not(.zoom) .page img { height: 100%; object-fit: contain; }
+}
 @keyframes fadein { from { opacity: 0; } }
 .view.zoom .page { width: 220%; }
 .view.zoom img { cursor: zoom-out; }
