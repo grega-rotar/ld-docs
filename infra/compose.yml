@@ -5,7 +5,7 @@ services:
   app:
     image: ghcr.io/grega-rotar/ld-docs:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    env_file: .env  # API_KEYS (comma-separated), optional CLAUDE_MODEL / MAX_PARALLEL / JOB_TTL_DAYS
+    env_file: .env  # API_KEYS (comma-separated); READER_URL + READER_KEY for the local reader; optional CLAUDE_MODEL / MAX_PARALLEL / JOB_TTL_DAYS
     # The server-wide Traefik in /srv/edge routes ld-docs.etiam.si here.
     networks:
       - default

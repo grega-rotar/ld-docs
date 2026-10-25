@@ -218,12 +218,29 @@ def test_read_document(no_vlm, monkeypatch):
     assert out["uncertain_fields"] == [k for k in document.FIELDS if out["confidence"][k] < 0.9]
 
 
-def test_a_half_filled_row_is_flagged(no_vlm, monkeypatch):
+def test_upside_down_and_sideways_scans_are_turned_back(no_vlm, monkeypatch):
+    monkeypatch.setattr(vlm, "read_amount", lambda crop: "EMPTY")
+    p1 = S.page1(S.Page1(rows=[S.Row("", "BAM", "BIH"), S.Row(), S.Row()]))
+    for turned in (p1.rotate(180), p1.rotate(90, expand=True)):
+        out = document.read_document([turned])
+        assert (out["currency1"], out["country1"], out["case_number"]) == ("BAM", "BIH", "10344-123/2023")
+        assert any("turned" in w for w in out["warnings"])
+
+
+def test_a_half_filled_row_is_a_note_not_a_doubt(no_vlm, monkeypatch):
     monkeypatch.setattr(vlm, "read_amount", lambda crop: "EMPTY")
     p1 = S.page1(S.Page1(rows=[S.Row("", "EUR", "D"), S.Row(), S.Row()]))  # currency and country, no amount
     out = document.read_document([p1])
-    assert out["currency1"] == "EUR" and out["confidence"]["currency1"] < 0.9
-    assert "vrstica 1" in out["notes"]
+    assert out["currency1"] == "EUR" and out["confidence"]["currency1"] >= 0.9  # read right: the form is incomplete
+    assert "vrstica 1: izpolnjeno le delno (manjka znesek)" in out["notes"]
+
+
+def test_the_model_misplacing_the_dot_is_still_agreement(monkeypatch):
+    g, bw = arr(S.page1(S.Page1(rows=[S.Row("___.200,00", "EUR", "D"), S.Row(), S.Row()])))
+    comb = page1.find_layout(g, bw).blocks[0].amount
+    monkeypatch.setattr(vlm, "read_amount", lambda crop: "20.000")  # same digits, dot in the wrong place
+    out = A.read(g, bw, comb)
+    assert out.value == 200.0 and out.confidence >= 0.88
 
 
 @pytest.mark.parametrize("digit", range(10))

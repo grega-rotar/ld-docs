@@ -77,6 +77,10 @@ def page1(spec: Page1) -> Image.Image:
     im = Image.new("L", (2480, 3508), 255)
     d = ImageDraw.Draw(im)
     f = font(36)
+    for y in range(70, 290, 22):  # a QR-like block top left (the real one is read by app/pages.py, not here)
+        for x in range(57, 280, 22):
+            if (x * 7 + y * 13) % 5 < 3:
+                d.rectangle([x, y, x + 21, y + 21], fill=0)
     for i, (label, value) in enumerate((("Ämnet nummer:", spec.case), ("Dokumentation nummer:", spec.documentation),
                                         ("Förmånstagaren nummer:", spec.beneficiary))):  # fmt: skip
         d.text((310, 395 + i * 58), label, font=f, fill=0)

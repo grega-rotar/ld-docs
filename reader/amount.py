@@ -13,6 +13,8 @@ from . import digits as D
 from . import vlm
 from .layout import Comb
 
+CELL_SURE = 0.94  # every digit this sure (CNN softmax) for an agreed amount to skip the person; README "Accuracy"
+
 
 @dataclass
 class Amount:
@@ -84,34 +86,23 @@ def read(gray: np.ndarray, bw: np.ndarray, comb: Comb | None, second_opinion: bo
 
     crop = gray[max(comb.cells[0].y - 25, 0) : comb.cells[0].y + comb.cells[0].h + 35, max(comb.x0 - 15, 0) : comb.x1 + 15]
     text = vlm.read_amount(crop)
-    other = parse(text)
-    if other is not None and value is not None and abs(other - value) < 0.005:
-        conf = 0.99 if cnn_conf >= 0.9 else 0.95
+    # Compared digit by digit, not as numbers: which cells hold a digit is measured (ink), so where the
+    # dot goes is known; the model often misplaces it ('2.000,00' for '200,00') but reads the digits.
+    ours = "".join(str(c.digit) for c in written)
+    theirs = "".join(ch for ch in text if ch.isdigit())
+    if theirs == ours:
+        conf = 0.97 if cnn_conf >= CELL_SURE else 0.88
         if problems:
             conf = min(conf, 0.88)
         return Amount(value, conf, "; ".join(problems), picture)
-    # They differ. If the model's number fits a second choice of the CNN in the cell(s) that differ,
-    # the model is probably right; otherwise keep the CNN's, but either way a person checks it.
-    alt = _alternative_fit(groups, other)
-    if alt:
-        return Amount(other, 0.75, f"števke prebrane različno ({picture} / {text}); izbrano {text}", picture)
+    # They differ. Where the model's digits are a second choice of the CNN in every cell that differs,
+    # the model is probably right; otherwise keep the CNN's (the better reader per cell). Either way a person checks.
+    if len(theirs) == len(ours) and all(
+        a == b or int(b) in [d for d, p in c.alternatives if p > 0.05] for a, b, c in zip(ours, theirs, written)
+    ):
+        for c, b in zip(written, theirs):
+            c.digit = int(b)
+        alt, alt_picture = D.value(groups)
+        return Amount(alt, 0.75, f"števke prebrane različno ({picture} / {text}); izbrano {alt_picture}", alt_picture)
     note = f"števke prebrane različno ({picture} / {text or 'nič'})"
     return Amount(value, min(0.6, cnn_conf), "; ".join([note] + problems), picture)
-
-
-def _alternative_fit(groups: list[list[D.Cell]], other: float | None) -> bool:
-    """Does `other` come out of the cells if some digits take their second most likely value?"""
-    if other is None:
-        return False
-    whole, dec = f"{other:.2f}".split(".")
-    cells_w = [c for g in groups[:-1] for c in g if c.digit is not None]
-    cells_d = [c for c in groups[-1] if c.digit is not None] if len(groups) > 1 else []
-    want = whole.rjust(len(cells_w), "0")[-len(cells_w) :] if cells_w else ""
-    if cells_w and len(whole.lstrip("0") or "") > len(cells_w):
-        return False
-    pairs = list(zip(cells_w, want)) + list(zip(cells_d, dec[: len(cells_d)]))
-    for c, ch in pairs:
-        d = int(ch)
-        if c.digit != d and d not in [a for a, p in c.alternatives if p > 0.05]:
-            return False
-    return True

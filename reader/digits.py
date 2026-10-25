@@ -13,7 +13,10 @@ import numpy as np
 
 from .layout import Comb
 
-MODEL = Path(__file__).parent / "models" / "digits.onnx"
+# The model fine-tuned on local scans (git-ignored, see reader/training/finetune_digits.py) wins over the
+# public one (MNIST + EMNIST only) when it is there.
+_MODELS = Path(__file__).parent / "models"
+MODEL = next((p for p in (_MODELS / "digits.local.onnx", _MODELS / "digits.onnx") if p.exists()), _MODELS / "digits.onnx")
 MIN_INK = 120  # stroke pixels for a cell to count as written (a digit has 400+)
 
 

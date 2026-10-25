@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets
 
-OUT = Path(__file__).parent.parent / "models" / "digits.onnx"
+OUT = Path(__file__).parent.parent / "models" / "digits.onnx"  # public data only: committed
 DATA = Path("/tmp/digit-data")
 
 
@@ -124,6 +124,7 @@ def main():
             msg += f" real-cells accuracy {(p == real['Y']).mean():.4f} ({(p != real['Y']).sum()} wrong of {len(p)})"
         print(msg, flush=True)
     net.eval()
+    torch.save(net.state_dict(), DATA / "digits.pt")  # the start for finetune_digits.py
     OUT.parent.mkdir(exist_ok=True)
     torch.onnx.export(net, torch.zeros(1, 1, 28, 28), OUT, input_names=["x"], output_names=["logits"],
                       dynamic_axes={"x": {0: "n"}, "logits": {0: "n"}}, dynamo=False)  # fmt: skip

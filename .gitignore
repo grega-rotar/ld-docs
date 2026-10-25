@@ -4,3 +4,5 @@ results/
 __pycache__/
 .pytest_cache/
 .env
+# Fine-tuned on cells cut from real scans (reader/training/finetune_digits.py): never in the public repo.
+reader/models/*.local.onnx

@@ -56,10 +56,36 @@ def to_array(image: Image.Image) -> np.ndarray:
     dpi tag, which PDF renders, faxes and re-saved PNGs often get wrong or leave out.
     """
     g = image.convert("L")
-    scale = A4_HEIGHT / g.height
+    scale = A4_HEIGHT / max(g.height, g.width)  # the long side, so a sideways scan scales right too
     if abs(scale - 1) > 0.03:
-        g = g.resize((round(g.width * scale), A4_HEIGHT), Image.LANCZOS if scale < 1 else Image.BICUBIC)
+        g = g.resize((round(g.width * scale), round(g.height * scale)), Image.LANCZOS if scale < 1 else Image.BICUBIC)
     return np.asarray(g)
+
+
+def upright(gray: np.ndarray, page: int) -> tuple[np.ndarray, int]:
+    """The page turned the right way up, and by how many degrees it was turned (0, 90, 180, 270).
+
+    Page 1: its checkbox rows fill the lower half, and its QR code sits top left (densest corner); a
+    damaged QR code alone can't turn the page. Page 2 has no QR code or checkboxes; its dotted amount
+    cells sit in the top third, so the turn that puts them there wins.
+    """
+    turns = [(0, gray), (180, np.ascontiguousarray(gray[::-1, ::-1]))]
+    if gray.shape[1] > gray.shape[0]:  # landscape: scanned sideways
+        turns = [(90, np.ascontiguousarray(np.rot90(gray, 1))), (270, np.ascontiguousarray(np.rot90(gray, 3)))]
+
+    def score(g: np.ndarray) -> float:
+        bw = ink(g)
+        h, w = bw.shape
+        if page == 1:
+            boxes = find_checkboxes(bw)
+            low = float(np.mean([b.cy for b in boxes]) / h) if boxes else 0.5  # ~0.65 upright, ~0.35 upside down
+            c = int(min(h, w) * 0.12)
+            return low + 0.5 * float((bw[:c, :c] > 0).mean())
+        dots = _dots(bw)
+        return float((dots[: h // 3] > 0).mean() - (dots[h * 2 // 3 :] > 0).mean())
+
+    best = max(turns, key=lambda t: score(t[1]))
+    return best[1], best[0]
 
 
 def ink(gray: np.ndarray) -> np.ndarray:

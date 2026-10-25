@@ -1,8 +1,9 @@
 """One document (page 1 + page 2 images) → the same result the Claude version gives, read locally.
 
 Fields, a confidence per field, `uncertain_fields` (everything below 0.9) and `notes` in Slovenian for
-the clerk. Every confidence is earned: from measured ink, from two readers agreeing, or from the form's
-own cross-checks (a ticked currency needs an amount, a currency must belong to the country, …).
+the clerk. Every confidence is earned: from measured ink, or from two readers agreeing (a currency must also
+belong to the country). Things wrong with the form itself (a half-filled row, NO ticked but rows filled) are
+notes: the reading is right, the clerk still has to know.
 """
 import time
 
@@ -15,7 +16,7 @@ from . import marks as M
 from . import page1 as P1
 from . import page2 as P2
 from .header import read_header
-from .layout import deskew, ink, to_array
+from .layout import deskew, ink, to_array, upright
 
 CHECK_BELOW = 0.9
 FIELDS = (
@@ -64,7 +65,7 @@ def read_document(pages: list[Image.Image], second_opinion: bool = True) -> dict
     notes: list[str] = []
     warnings: list[str] = []
 
-    g1 = deskew(to_array(pages[0]))
+    g1 = deskew(_upright(pages[0], 1, warnings))
     bw1 = ink(g1)
     head = read_header(g1)
     for k in ("case_number", "documentation_number", "beneficiary_number"):
@@ -86,10 +87,10 @@ def read_document(pages: list[Image.Image], second_opinion: bool = True) -> dict
             v, c, n = _choice(bw1, getattr(block, kind) if block else None, f"vrstica {i}, {what}")
             out[f"{kind}{i}"], conf[f"{kind}{i}"] = v, c
             notes += [n] if n else []
-        _row_check(out, conf, notes, i)
+        _row_check(out, notes, i)
 
     if len(pages) > 1:
-        g2 = deskew(to_array(pages[1]))
+        g2 = deskew(_upright(pages[1], 2, warnings))
         bw2 = ink(g2)
         lay2 = P2.find_layout(bw2)
         warnings += lay2.warnings
@@ -108,14 +109,13 @@ def read_document(pages: list[Image.Image], second_opinion: bool = True) -> dict
             sig = P2.handwriting_ink(bw2, lay2.signature)
             out["signature_present"] = sig >= SIGNATURE_INK
             conf["signature_present"] = 0.99 if sig < SIGNATURE_INK / 2 or sig > SIGNATURE_INK * 2 else 0.75
-        _page2_check(out, conf, notes)
+        _page2_check(out, notes)
     else:
         for k in ("amount", "currency", "country", "signature_present"):
             out[k], conf[k] = None, 0.99
 
     if out["other_country"] is False and any(out[f"amount{i}"] or out[f"currency{i}"] for i in (1, 2, 3)):
         notes.append("označeno NE, a vrstice z zneski so izpolnjene")
-        conf["other_country"] = min(conf["other_country"], 0.7)
     if margin.get("case_number") and out["case_number"] and margin["case_number"] != out["case_number"]:
         notes.append(f"številka zadeve v glavi ({out['case_number']}) in na robu ({margin['case_number']}) se razlikujeta")
 
@@ -128,22 +128,26 @@ def read_document(pages: list[Image.Image], second_opinion: bool = True) -> dict
     return out
 
 
-def _row_check(out: dict, conf: dict, notes: list, i: int) -> None:
-    """A row is all or nothing: an amount needs a currency and a country, and the other way round."""
+def _upright(page: Image.Image, n: int, warnings: list) -> np.ndarray:
+    gray, turned = upright(to_array(page), n)
+    if turned:
+        warnings.append(f"page {n} was scanned turned by {turned}°; read turned back")
+    return gray
+
+
+def _row_check(out: dict, notes: list, i: int) -> None:
+    """A row is all or nothing: an amount needs a currency and a country. A half-filled row is the
+    form's problem, not a misreading, so it is a note for the clerk; the fields keep their confidence."""
     have = {k: out[f"{k}{i}"] is not None for k in ("amount", "currency", "country")}
     if any(have.values()) and not all(have.values()):
         missing = [k for k, v in have.items() if not v]
         names = {"amount": "znesek", "currency": "valuta", "country": "država"}
         notes.append(f"vrstica {i}: izpolnjeno le delno (manjka {', '.join(names[k] for k in missing)})")
-        for k in ("amount", "currency", "country"):
-            conf[f"{k}{i}"] = min(conf[f"{k}{i}"], 0.8)
 
 
-def _page2_check(out: dict, conf: dict, notes: list) -> None:
+def _page2_check(out: dict, notes: list) -> None:
     have = {k: out[k] is not None for k in ("amount", "currency", "country")}
     if any(have.values()) and not all(have.values()):
         missing = [k for k, v in have.items() if not v]
         names = {"amount": "znesek", "currency": "valuta", "country": "država"}
         notes.append(f"stran 2: izpolnjeno le delno (manjka {', '.join(names[k] for k in missing)})")
-        for k in ("amount", "currency", "country"):
-            conf[k] = min(conf[k], 0.8)

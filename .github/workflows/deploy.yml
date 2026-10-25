@@ -26,11 +26,23 @@ jobs:
       - run: docker build -t ld-docs:check .
       - run: |
           docker run --rm -v "$PWD:/src:ro" -w /src --entrypoint sh ld-docs:check -c \
-            "pip install -q --user --break-system-packages -r requirements-dev.txt && python3 -m pytest -q -p no:cacheprovider tests"
+            "pip install -q --user --break-system-packages -r requirements-dev.txt && python3 -m pytest -q -p no:cacheprovider tests --ignore=tests/reader"
+
+  # The local reader (reader/) runs on the GPU machine, not here; its tests use synthetic forms and stub
+  # out the vision model, so they run on a plain runner inside the reader image.
+  reader:
+    if: ${{ !inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -f reader/Dockerfile -t ld-reader:check .
+      - run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src -e PYTHONPATH=/src ld-reader:check sh -c \
+            "pip install -q --user -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests/reader"
 
   image:
     if: ${{ github.event_name != 'pull_request' && !inputs.tag }}
-    needs: check
+    needs: [check, reader]
     runs-on: ubuntu-latest
     permissions:
       contents: read
