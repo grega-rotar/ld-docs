@@ -1,21 +1,112 @@
 # ld-docs
 
-API at **https://ld-docs.etiam.si** that reads ZPIZ "Izjava o višini tuje pokojnine" (LD) forms and returns the JSON ZPIZ asked for (`LDDokumentP1` + `LDDokumentP2`), linked to the case.
+Reads ZPIZ "Izjava o višini tuje pokojnine" (LD) forms from scans and returns the JSON ZPIZ asked for
+(`LDDokumentP1` + `LDDokumentP2`), linked to the case. Clerks check the fields it wasn't sure about in a web page,
+correct them, and export the batch as JSON or CSV.
 
-- Page 1 is recognised by its ZPIZ QR code. The code gives `document_id` and `vk` exactly; they are not OCR guesses.
-- Claude (through claude-pool) reads the case number, the ticked boxes and the handwriting. Each document is one locked-down `claude -p` run: it may only `Read` its two page images, and it has to answer in a JSON schema (`app/extract.py`, prompt in `app/prompt.md`).
-- The forms can be in any language or script (Swedish, French, Serbian Cyrillic …). The layout is the same.
+- Page 1 is recognised by its ZPIZ QR code, which gives `document_id` and `vk` exactly (not OCR guesses).
+- Ticked boxes, printed numbers and handwriting are read field by field. Every field gets a confidence, and anything
+  below 0.9 is highlighted for a person to check.
+- Forms in any language or script (Swedish, French, Serbian Cyrillic …) are read the same way.
 
-## Running at ZPIZ (on-premises)
-ZPIZ runs its own copy on one Linux VM: two containers (`api` + `reader`, no GPU) from [`deploy/zpiz/`](deploy/zpiz/),
-reading only with the local reader (`READERS=local`), whose vision model is Qwen3.6 on ZPIZ's OpenShift AI (vLLM).
-Scans stay on the VM; only crops of the handwritten fields go to the vLLM endpoint inside ZPIZ's network.
-- [docs/zpiz-namestitev.md](docs/zpiz-namestitev.md): install and operation, for ZPIZ IT (Slovenian).
-- [docs/navodila-za-referente.md](docs/navodila-za-referente.md): the review page, for clerks (Slovenian).
+It runs on your own server from two ready-made Docker images. Scans never leave that server; only small crops of the
+handwritten fields go to a vision model you host (e.g. Qwen3.6 on OpenShift AI / vLLM).
+
+**Contents:** [Docker images](#docker-images) · [Install on your server](#install-on-your-server) ·
+[Using it](#using-it) · [API](#api) · [How the reader works](#how-the-reader-works) ·
+[Development](#development)
+
+## Docker images
+
+Built by CI from every commit on `main` and published on GitHub Container Registry:
+
+| Image | What it is | Package page (versions) |
+|---|---|---|
+| `ghcr.io/grega-rotar/ld-docs` | the web page and the API (port 8000) | [ld-docs](https://github.com/grega-rotar/ld-docs/pkgs/container/ld-docs) |
+| `ghcr.io/grega-rotar/ld-reader` | the reader: OpenCV, Tesseract and a digit model on the CPU (port 8100, internal only) | [ld-reader](https://github.com/grega-rotar/ld-docs/pkgs/container/ld-reader) |
+
+Tags: `latest` (the newest `main`) and the full git commit sha of each build. Both images of one commit carry the same
+tag, so one `IMAGE_TAG` picks a version. In production, pin a sha.
+
+```bash
+docker pull ghcr.io/grega-rotar/ld-docs:latest
+docker pull ghcr.io/grega-rotar/ld-reader:latest
+```
+
+## Install on your server
+
+You need:
+- a Linux VM with Docker Engine and the compose plugin: 2–4 vCPU, 4 GB RAM and 10 GB disk are a good start; no GPU;
+- an OpenAI-compatible vision model (vLLM, OpenShift AI model serving or MaaS), with its URL, key and model name;
+- outbound HTTPS from the VM to that model, and inbound HTTP(S) from the clerks' network.
+
+```bash
+sudo mkdir -p /opt/ld-docs/certs && cd /opt/ld-docs
+curl -fsSLO https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/.env.example
+chmod 600 .env
+vi .env                         # fill in the settings below
+docker compose config --quiet   # names any required setting that is still missing
+docker compose up -d            # pulls both images and starts them
+docker compose ps               # both "healthy" after ~30 s
+curl -s http://127.0.0.1:8080/health
+# {"ok": true, "reader": "local", "readers": ["local"], "job_ttl_days": 7, "local": {"ok": true, "model": "…"}}
+```
+
+Then open `http://<server>:8080`, sign in with one of the `API_KEYS` and drop a few scans.
+`"local": {"ok": false}` means the reader can't reach the vision model: check `VLM_URL`, `VLM_KEY` and the CA.
+
+For HTTPS put it behind your reverse proxy (`HTTP_BIND=127.0.0.1`), allowing uploads of ~200 MB and a 300 s read
+timeout. The full guide (Slovenian): TLS and the cluster CA, checking the model endpoint, token expiry, logs, offline
+install, troubleshooting: **[docs/zpiz-namestitev.md](docs/zpiz-namestitev.md)**.
+
+### Settings (`.env`)
+
+| Variable | Default | |
+|---|---|---|
+| `IMAGE_TAG` | `latest` | a git sha from the [package page](https://github.com/grega-rotar/ld-docs/pkgs/container/ld-docs) pins a version |
+| `HTTP_BIND` / `HTTP_PORT` | `0.0.0.0` / `8080` | where the page and the API listen |
+| `API_KEYS` | required | comma-separated, one per client; make each with `openssl rand -hex 32` |
+| `READER_KEY` | required | shared by the two containers; `openssl rand -hex 32` |
+| `VLM_API` | `openai` | the vision model's API type |
+| `VLM_URL` | required | the model's base URL, ending in `/v1` |
+| `VLM_KEY` | required | its bearer token (service-account token or MaaS key) |
+| `VLM_MODEL` | `redhataiqwen36-35b-a3b` | the model id, as listed by `GET {VLM_URL}/models` |
+| `VLM_CA_BUNDLE` | (system CAs) | `/certs/ca.pem`, after putting the cluster's CA in `certs/ca.pem` |
+| `VLM_VERIFY_TLS` | `1` | `0` turns TLS verification off (last resort) |
+| `JOB_TTL_DAYS` | `7` | results hold personal data and are deleted after this many days |
+| `LOCAL_PARALLEL` / `READER_PARALLEL` | `3` / `2` | documents read at once; about one per vCPU |
+
+### Update or roll back
+
+```bash
+cd /opt/ld-docs
+# in .env, set IMAGE_TAG to the new sha (write down the old one)
+docker compose pull && docker compose up -d
+```
+To roll back, set the old sha and run the same two commands. Reviews and corrections are kept (volume `ld_data`).
+Without internet access on the VM, `docker save` the two images elsewhere and `docker load` them there (see the guide).
+
+### Before clerks rely on it
+The reader's prompts were tuned on Qwen3-VL 8B. With another vision model, first run the accuracy check on scans whose
+right answers you know ([Check accuracy on scans](#check-accuracy-on-scans)).
+
+## Using it
+
+Clerks open the page, sign in with their key and drop scans: loose pages, multi-page TIFF/PDF, or a ZIP of a whole
+batch. Each document then shows its fields next to the scan, with the fields to check in yellow:
+- **Pravilno** confirms a value;
+- **Shrani popravek** saves a correction (the value that was read is kept too);
+- **Potrdi dokument in naprej** confirms the document and opens the next one;
+- **JSON za ZPIZ** and **CSV** (for Excel) export the batch with the corrections.
+
+Guide for clerks (Slovenian): **[docs/navodila-za-referente.md](docs/navodila-za-referente.md)**.
+Other systems can use the same API, below, with their own API key.
 
 ## API
 
-A simple upload page is at `/`: enter the API key, drop the scans, and download the results as JSON. Every `/v1` call needs `Authorization: Bearer <API key>`. Interactive docs are at `/docs`.
+Every `/v1` call needs `Authorization: Bearer <API key>`. Interactive docs are at `/docs` on your server. The
+examples use our hosted copy, `https://ld-docs.etiam.si`; use your own server's address instead.
 
 ### One document: `POST /v1/extract`
 Send page 1 and page 2 as two files, or one multi-page TIFF/PDF. TIFF, PNG, JPEG and PDF are accepted. The call waits for the answer (usually 15–30 s).
@@ -125,10 +216,10 @@ No key needed. `{"ok": true, "reader": "local", "readers": ["local", "claude"], 
 `local` is there when the local reader is enabled: `ok` is `false` when the reader is unreachable or its vision model
 isn't loaded (checked with a 3 s timeout, cached 15 s). The upload page then shows "Bralnik ne deluje".
 
-## Local reader (no Claude, no per-document cost)
-With `READER_URL` set, the API sends each document to `reader/` instead of Claude: a service on a machine with
-an NVIDIA GPU (a laptop with an RTX 4080 12 GB is enough), reached through a Cloudflare Tunnel. The API, the
-upload page and the JSON stay the same; `model` says `local (…)` and `usage.cost_usd` is 0.
+## How the reader works
+The `ld-reader` image (`reader/`) reads each document; the API sends it the pages at `READER_URL`. The vision model
+it uses for handwriting is configurable: Qwen3.6 over vLLM at ZPIZ, or Qwen3-VL 8B through Ollama on a GPU.
+`model` in the result says `local (…)`.
 
 How it reads a document, in any language and any version of the form. Nothing is placed by fixed coordinates:
 - **Layout** (`layout.py`, `page1.py`, `page2.py`): the page is straightened, checkboxes are found by shape, dotted
@@ -141,29 +232,11 @@ How it reads a document, in any language and any version of the form. Nothing is
   beneficiary number usually contains the documentation number, which confirms both.
 - **Amounts** (`digits.py`, `amount.py`): a small CNN reads each cell, the vision model reads the whole row; they
   have to agree.
-- **Page 2 handwriting** (`handwriting.py`, `names.py`, `vlm.py`): Qwen3-VL 8B (Ollama, ~6 GB of GPU memory) reads
+- **Page 2 handwriting** (`handwriting.py`, `names.py`, `vlm.py`): the vision model reads
   the currency and the country, then picks among the closest real names from every language in CLDR. The currency
   has to be one the country used. Empty fields are measured empty and never shown to the model.
 - **Confidence** comes from agreement and cross-checks, not from a model's own estimate: anything below 0.9 is in
   `uncertain_fields` with a reason in `notes` (in Slovenian). On ZPIZ's 51 sample documents: see "Accuracy" below.
-
-### Run it on the GPU machine
-```bash
-# once: NVIDIA driver + Docker with GPU support (WSL: Docker Desktop or the NVIDIA Container Toolkit)
-docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi   # must list the GPU
-cp reader/.env.example reader/.env       # READER_KEYS, TUNNEL_TOKEN
-docker compose -f reader/compose.yml up -d --build   # first start pulls the model (6 GB)
-```
-`reader/.env` (mode 600, never committed):
-
-| Variable | |
-|---|---|
-| `READER_KEYS` | comma-separated keys the API must send (`Authorization: Bearer …`); generate with `openssl rand -hex 32` |
-| `TUNNEL_TOKEN` | the Cloudflare Tunnel's token (Zero Trust → Networks → Tunnels → create → Docker); its public hostname (e.g. `ld-reader.etiam.si`) points to `http://reader:8100` |
-| `VLM_MODEL` | optional, default `qwen3-vl:8b-instruct` |
-| `READER_PARALLEL` | optional, documents read at once, default 2 |
-
-Nothing listens on the machine's own network: the tunnel is the only way in, and every call needs a key.
 
 ### Vision model on an OpenAI-compatible server (vLLM)
 Instead of Ollama on a GPU, the reader can send its crops to any OpenAI-compatible server, such as vLLM on
@@ -185,25 +258,6 @@ With `openai`, each call is one `POST {VLM_URL}/chat/completions` with the crop 
 (`chat_template_kwargs.enable_thinking: false`; any `<think>…</think>` in the answer is removed). The reader's
 `/health` reports `model_loaded` from `GET {VLM_URL}/models`. A 5xx from the model makes `/v1/read` answer 503.
 The prompts were tuned on Qwen3-VL 8B: run `reader.evaluate` (below) with a new model before trusting it.
-On the server, set `READER_URL=https://ld-reader.etiam.si` and `READER_KEY=<one of READER_KEYS>` in
-`/srv/ld-docs/.env` and restart. Without `READER_URL` the API uses Claude as before.
-If the reader is down, `/v1/extract` answers 503 and batch documents get `status: error`; send them again later.
-
-### Local, Claude, or both
-With `READER_URL` set, both readers are available (`GET /health` lists them in `readers`). The local one is the
-default; a call picks another with the form field `reader`:
-
-```bash
-curl -H "Authorization: Bearer $KEY" -F reader=both -F files=@ld_test.zip https://ld-docs.etiam.si/v1/batch
-```
-
-`reader=both` reads every document with both at once and returns the local result plus `compare`:
-`{"reader": "claude", "differences": ["amount", …], "result": {…Claude's whole result…}}`, or
-`{"reader": "claude", "error": "…"}` if Claude failed (if the local reader failed, the answer is Claude's and
-`compare` holds the local error). Amounts are compared to the cent; names ignore case and accents. In the upload
-page, the switch next to the API key does the same: "Primerjava" shows each field Claude read differently under it.
-Each reader keeps its own slots, so a comparison is as fast as the slower of the two.
-
 ### Check accuracy on scans
 ```bash
 # reference: a /v1/batch result for the same scans (e.g. from the Claude version), saved as results/ref.json
@@ -243,7 +297,51 @@ python -m reader.training.cells_from_scans ld_test results/ref.json results/cell
 python -m reader.training.finetune_digits results/cells.npz                             # in ld-train, prints cross-validated accuracy
 ```
 
-## Configuration (`/srv/ld-docs/.env` on the server)
+## Our hosted copy (ld-docs.etiam.si)
+Besides the local reader, our own server can read with Claude (through claude-pool): each document is one
+locked-down `claude -p` run that may only `Read` its two page images and has to answer in a JSON schema
+(`app/extract.py`, prompt in `app/prompt.md`). There, the local reader runs on a laptop with an NVIDIA GPU
+(RTX 4080 12 GB), reached through a Cloudflare Tunnel, with Qwen3-VL 8B in Ollama. None of this is needed at ZPIZ.
+
+### The local reader on a GPU machine
+```bash
+# once: NVIDIA driver + Docker with GPU support (WSL: Docker Desktop or the NVIDIA Container Toolkit)
+docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi   # must list the GPU
+cp reader/.env.example reader/.env       # READER_KEYS, TUNNEL_TOKEN
+docker compose -f reader/compose.yml up -d --build   # first start pulls the model (6 GB)
+```
+`reader/.env` (mode 600, never committed):
+
+| Variable | |
+|---|---|
+| `READER_KEYS` | comma-separated keys the API must send (`Authorization: Bearer …`); generate with `openssl rand -hex 32` |
+| `TUNNEL_TOKEN` | the Cloudflare Tunnel's token (Zero Trust → Networks → Tunnels → create → Docker); its public hostname (e.g. `ld-reader.etiam.si`) points to `http://reader:8100` |
+| `VLM_MODEL` | optional, default `qwen3-vl:8b-instruct` |
+| `READER_PARALLEL` | optional, documents read at once, default 2 |
+
+Nothing listens on the machine's own network: the tunnel is the only way in, and every call needs a key.
+
+On the server, set `READER_URL=https://ld-reader.etiam.si` and `READER_KEY=<one of READER_KEYS>` in
+`/srv/ld-docs/.env` and restart. Without `READER_URL` the API uses Claude as before.
+If the reader is down, `/v1/extract` answers 503 and batch documents get `status: error`; send them again later.
+
+
+### Local, Claude, or both
+With `READER_URL` set, both readers are available (`GET /health` lists them in `readers`). The local one is the
+default; a call picks another with the form field `reader`:
+
+```bash
+curl -H "Authorization: Bearer $KEY" -F reader=both -F files=@ld_test.zip https://ld-docs.etiam.si/v1/batch
+```
+
+`reader=both` reads every document with both at once and returns the local result plus `compare`:
+`{"reader": "claude", "differences": ["amount", …], "result": {…Claude's whole result…}}`, or
+`{"reader": "claude", "error": "…"}` if Claude failed (if the local reader failed, the answer is Claude's and
+`compare` holds the local error). Amounts are compared to the cent; names ignore case and accents. In the upload
+page, the switch next to the API key does the same: "Primerjava" shows each field Claude read differently under it.
+Each reader keeps its own slots, so a comparison is as fast as the slower of the two.
+
+### Configuration (`/srv/ld-docs/.env` on the server)
 | Variable | Default | |
 |---|---|---|
 | `API_KEYS` | (none, so every call gets 503) | comma-separated; one per client, e.g. one for ZPIZ |
