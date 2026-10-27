@@ -7,11 +7,12 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import extract as ex
+from . import review
 from .extract import ExtractError, extract
 from .pages import group, load_pages, unpack
 
@@ -79,7 +80,10 @@ READER = Form(None, description='"local", "claude", or "both" (reads with both a
 
 @app.get("/health")
 def health():
-    return {"ok": True, "reader": ex.DEFAULT_READER, "readers": readers()}
+    out = {"ok": True, "reader": ex.DEFAULT_READER, "readers": readers(), "job_ttl_days": JOB_TTL // 86400}
+    if ex.LOCAL in ex.READERS:
+        out["local"] = ex.reader_health()
+    return out
 
 
 @app.post("/v1/extract", dependencies=[Depends(auth)])
@@ -174,15 +178,53 @@ async def batch(files: list[UploadFile] = File(...), reader: str | None = READER
     return {k: job[k] for k in ("job_id", "status", "total")}
 
 
+def load_job(job_id: str) -> dict:
+    """The live job (the very dict the batch updates) while it runs, else the one on disk."""
+    if job_id in _live:
+        return _live[job_id]
+    if not job_id.isalnum() or not job_path(job_id).exists():  # isalnum: job_id becomes a file name
+        raise HTTPException(404, "no such job (results are deleted after JOB_TTL_DAYS)")
+    return json.loads(job_path(job_id).read_text())
+
+
 @app.get("/v1/batch/{job_id}", dependencies=[Depends(auth)])
 def batch_status(job_id: str):
     """While a job runs, each pending document has `stage`: queued, preparing, starting, page1, page2, thinking,
     writing (with `fields` / `of`) or retrying, and `started_at` once it has a slot."""
-    if job_id in _live:
-        return JSONResponse(_live[job_id])
-    if not job_id.isalnum() or not job_path(job_id).exists():
-        raise HTTPException(404, "no such job (results are deleted after JOB_TTL_DAYS)")
-    job = json.loads(job_path(job_id).read_text())
-    if job["status"] in ("splitting", "running"):
+    job = load_job(job_id)
+    if job_id not in _live and job["status"] in ("splitting", "running"):
         job["status"] = "interrupted"  # the server restarted while it ran; send the files again
     return JSONResponse(job)
+
+
+# async: on the event loop, so a review and the running batch never save() the same job at once.
+@app.patch("/v1/batch/{job_id}/documents/{index}", dependencies=[Depends(auth)])
+async def review_document(job_id: str, index: int, body: dict = Body(...)):
+    """A clerk's review: {"fields": {"amount": {"action": "corrected", "value": 2500.02},
+    "currency": {"action": "confirmed"}}, "confirm": true}. Returns the document with its `review`."""
+    job = load_job(job_id)
+    if not 0 <= index < len(job["documents"]):
+        raise HTTPException(404, f"no document {index} in this job")
+    doc = job["documents"][index]
+    if doc.get("status") != "done":
+        raise HTTPException(409, f"document {index} is {doc.get('status')}: only read documents can be reviewed")
+    try:
+        fields, confirm = review.check(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    review.apply(doc, fields, confirm)
+    save(job)  # a job cut off by a restart keeps its status on disk; only GET calls it interrupted
+    return doc
+
+
+@app.get("/v1/batch/{job_id}/export", dependencies=[Depends(auth)])
+async def export(job_id: str, format: str = "json"):
+    """The batch with the clerks' corrections: json (ZPIZ's fields + review) or csv (for Excel).
+    Any time: documents not read yet are in it with their status."""
+    if format not in ("json", "csv"):
+        raise HTTPException(400, "format must be json or csv")
+    job = load_job(job_id)
+    name = {"Content-Disposition": f'attachment; filename="ld-{job["job_id"][:8]}.{format}"'}
+    if format == "csv":
+        return Response(review.export_csv(job), media_type="text/csv; charset=utf-8", headers=name)
+    return JSONResponse(review.export_json(job), headers=name)

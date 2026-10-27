@@ -229,7 +229,7 @@ def test_same():
 
 
 def test_health_says_which_reader(client, monkeypatch):
-    assert client.get("/health").json() == {"ok": True, "reader": "claude", "readers": ["claude"]}
+    assert client.get("/health").json() == {"ok": True, "reader": "claude", "readers": ["claude"], "job_ttl_days": 7}
     monkeypatch.setattr(ex, "READERS", [ex.LOCAL, ex.CLAUDE])
     monkeypatch.setattr(ex, "DEFAULT_READER", ex.LOCAL)
     assert client.get("/health").json()["readers"] == ["local", "claude", "both"]

@@ -14,6 +14,7 @@ on:
 
 env:
   IMAGE: ghcr.io/grega-rotar/ld-docs
+  READER_IMAGE: ghcr.io/grega-rotar/ld-reader
   HEALTH_URL: https://ld-docs.etiam.si/health
 
 jobs:
@@ -64,6 +65,18 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The reader image, for ZPIZ's own VM (deploy/zpiz/). Its own cache scope, so the two builds
+      # don't overwrite each other's cache. Not deployed anywhere from here.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: reader/Dockerfile
+          push: true
+          tags: |
+            ${{ env.READER_IMAGE }}:${{ github.sha }}
+            ${{ env.READER_IMAGE }}:latest
+          cache-from: type=gha,scope=reader
+          cache-to: type=gha,mode=max,scope=reader
 
   deploy:
     if: ${{ github.event_name != 'pull_request' && !cancelled() && !failure() }}

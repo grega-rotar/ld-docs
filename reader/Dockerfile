@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # The local reader (README "Local reader"): OpenCV + Tesseract + a small digit CNN on the CPU,
-# Qwen3-VL through the ollama container on the GPU. No API keys or scans in here.
+# Qwen3-VL through the ollama container on the GPU, or an OpenAI-compatible server with VLM_API=openai
+# (reader/vlm.py). No API keys or scans in here.
 FROM python:3.12-slim
 # Tesseract: English for the printed codes and numbers, the script models (Latin, Cyrillic, Greek) for
 # the yes/no words in any language of those alphabets.

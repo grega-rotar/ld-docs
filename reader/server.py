@@ -48,12 +48,7 @@ def auth(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
 
 @app.get("/health")
 async def health() -> dict:
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(f"{vlm.OLLAMA_URL}/api/ps")
-        loaded = any(m.get("name") == vlm.MODEL for m in r.json().get("models", []))
-    except Exception:
-        loaded = False
+    loaded = await asyncio.to_thread(vlm.loaded)
     return {"ok": True, "model": vlm.MODEL, "model_loaded": loaded}
 
 

@@ -3,6 +3,7 @@
 Read either by the local reader (READER_URL set: reader/ on a GPU machine, see README "Local reader")
 or by Claude through claude-pool: then each document is one `claude -p` run in its own temp dir that
 may only Read ./p1.png and ./p2.png and has to answer in SCHEMA (--json-schema).
+READERS=local (ZPIZ's own server) turns Claude off completely.
 """
 import asyncio
 import io
@@ -55,7 +56,22 @@ SCHEMA = {
 # Each reader has its own slots, so comparing them never slows either down. Batches share PARALLEL[reader] runs;
 # single calls have their own slots, so they never queue behind a batch (Cloudflare drops a request after ~100 s of silence).
 LOCAL, CLAUDE, BOTH = "local", "claude", "both"
-READERS = [LOCAL, CLAUDE] if READER_URL else [CLAUDE]
+
+
+def enabled_readers(spec: str, reader_url: str) -> list[str]:
+    """READERS (comma list) -> the readers this server offers. Unset: local too when READER_URL is set."""
+    if not spec.strip():
+        return [LOCAL, CLAUDE] if reader_url else [CLAUDE]
+    readers = list(dict.fromkeys(r.strip() for r in spec.split(",") if r.strip()))
+    if bad := [r for r in readers if r not in (LOCAL, CLAUDE)]:
+        raise RuntimeError(f"READERS: unknown reader {bad}, use local and/or claude")
+    if LOCAL in readers and not reader_url:
+        raise RuntimeError("READERS has local but READER_URL is not set")
+    return readers
+
+
+# Raises at import: a misconfigured server refuses to start instead of failing every document.
+READERS = enabled_readers(os.environ.get("READERS", ""), READER_URL)
 DEFAULT_READER = READERS[0]
 PARALLEL = {
     LOCAL: int(os.environ.get("LOCAL_PARALLEL", "3")),  # the local reader reads 2 at a time
@@ -65,6 +81,25 @@ SLOTS = {
     r: {True: asyncio.Semaphore(n), False: asyncio.Semaphore(int(os.environ.get("MAX_PARALLEL_SINGLE", "4")))}
     for r, n in PARALLEL.items()
 }
+
+
+HEALTH_TTL = 15
+_reader_health: dict[str, tuple[float, dict]] = {}  # READER_URL -> (checked at, answer)
+
+
+def reader_health() -> dict:
+    """{"ok", "model"} from the local reader's /health, cached so GET /health stays fast. Never raises."""
+    hit = _reader_health.get(READER_URL)
+    if hit and time.monotonic() - hit[0] < HEALTH_TTL:
+        return hit[1]
+    try:
+        r = httpx.get(f"{READER_URL}/health", timeout=3)
+        body = r.json() if r.status_code == 200 else {}
+        out = {"ok": body.get("model_loaded") is True, "model": body.get("model")}
+    except Exception:  # unreachable, too slow or not JSON: either way the reader can't read now
+        out = {"ok": False, "model": None}
+    _reader_health[READER_URL] = (time.monotonic(), out)
+    return out
 
 
 def parallel_of(reader: str) -> int:
@@ -78,6 +113,8 @@ class ExtractError(Exception):
 
 
 def claude_bin() -> str:
+    if CLAUDE not in READERS:  # READERS=local (ZPIZ): scans must never reach Claude, whatever asks
+        raise ExtractError("claude is not enabled on this server (READERS)")
     want = os.environ.get("CLAUDE_BIN", "claude-pool")
     found = shutil.which(want) or shutil.which("claude")
     if not found:

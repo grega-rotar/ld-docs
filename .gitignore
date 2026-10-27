@@ -6,3 +6,7 @@ __pycache__/
 .env
 # Fine-tuned on cells cut from real scans (reader/training/finetune_digits.py): never in the public repo.
 reader/models/*.local.onnx
+# ZPIZ deploy: the real .env (matched by .env above) and the cluster CA stay on the VM.
+deploy/zpiz/certs/*
+!deploy/zpiz/certs/.gitkeep
+deploy/zpiz/*.pem
