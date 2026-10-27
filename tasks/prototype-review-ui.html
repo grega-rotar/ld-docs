@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LD pregled – prototip</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* The design language of app/ui.html: scanner bed, sheet, ink, ballpoint, highlighter. */
+:root {
+  --bed: #E9EDF2; --bed-2: #DFE5EC; --sheet: #FFFFFF;
+  --ink: #12161B; --ink-2: #5A6470; --rule: #D5DCE3; --dot: #A7B1BC;
+  --pen: #2341C4; --pen-soft: #E6EBFC; --hl: #FFE14D; --hl-soft: #FFFBE0;
+  --amber: #8A5600; --err: #B8322A; --err-soft: #FBECEA; --ok: #1E7A4C;
+  --shadow: 0 1px 0 rgba(18,22,27,.04), 0 14px 34px -18px rgba(18,22,27,.30);
+  --display: "Archivo", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, sans-serif;
+  --mono: "Spline Sans Mono", ui-monospace, monospace;
+  --hand: "Segoe Script", "Bradley Hand", "Comic Sans MS", cursive;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #C9D0D8; color: var(--ink); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+a { color: var(--pen); }
+.mono { font-family: var(--mono); }
+.lbl { font: 650 11px/1.2 var(--display); font-stretch: 115%; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+kbd { font: 11px var(--mono); border: 1px solid #C3CBD4; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); color: var(--ink); }
+
+/* ---------- the prototype page itself ---------- */
+.proto-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 12px 40px; background: #12161B; color: #fff; }
+.proto-nav b { margin-right: 14px; font: 700 15px var(--display); font-stretch: 110%; }
+.proto-nav a { color: #D9E0E8; text-decoration: none; font-size: 13px; padding: 5px 10px; border-radius: 6px; }
+.proto-nav a:hover { background: #262C34; color: #fff; }
+.proto-intro { max-width: 1440px; margin: 0 auto; padding: 32px 40px 0; }
+.proto-intro h1 { margin: 0 0 8px; font: 760 32px/1.1 var(--display); font-stretch: 108%; }
+.proto-intro p { margin: 0; max-width: 820px; color: #3D4650; }
+.frame-title { max-width: 1440px; margin: 56px auto 12px; padding: 0 40px; display: flex; align-items: baseline; gap: 14px; }
+.frame-title h2 { margin: 0; font: 760 24px/1.1 var(--display); font-stretch: 108%; }
+.frame-title span { color: #3D4650; font-size: 14px; }
+.frame-wrap { max-width: 1440px; margin: 0 auto; padding: 0 40px; }
+.frame { background: var(--bed); border-radius: 12px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(18,22,27,.45); min-height: 900px; display: flex; flex-direction: column; }
+.frame.short { min-height: 0; }
+.states { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.states .frame { min-height: 560px; }
+.state-cap { margin: 0 0 8px; font: 700 15px var(--display); font-stretch: 108%; }
+
+/* ---------- shared app chrome ---------- */
+.top { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 14px 28px; border-bottom: 1px solid var(--rule); }
+.brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+.brand b { display: block; font: 800 19px/1 var(--display); font-stretch: 125%; letter-spacing: .02em; text-transform: uppercase; }
+.brand small { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-2); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.status.down::before { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border: 1px solid #C3CBD4; background: var(--sheet); border-radius: 8px; padding: 0 14px; font: 600 13.5px var(--body); color: var(--ink); cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { border-color: var(--ink-2); }
+.btn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+.btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
+.btn.big { min-height: 44px; padding: 0 20px; }
+.btn.huge { min-height: 56px; padding: 0 22px; font-size: 14.5px; }
+.btn kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
+.btn:disabled { opacity: .45; cursor: default; }
+.card { background: var(--sheet); border-radius: 14px; box-shadow: var(--shadow); }
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--bed-2); }
+.seg button { flex: 1; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; font: 600 12.5px var(--body); color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
+.bar { height: 4px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.bar.pen i { background: var(--pen); }
+
+/* three columns: queue | form | scan */
+.cols3 { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1.3fr) minmax(0, 1fr); }
+.cols2 { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+.queue { border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+.qhead { padding: 18px 18px 14px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 12px; }
+.qcount { display: flex; align-items: baseline; gap: 8px; }
+.qcount b { font: 760 30px/1 var(--display); font-stretch: 112%; font-variant-numeric: tabular-nums; }
+.qcount span { color: var(--ink-2); font-size: 13px; }
+.list { flex: 1; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; min-width: 0; }
+.item.sel { background: var(--sheet); box-shadow: var(--shadow); }
+.item .case { font: 500 13.5px var(--mono); }
+.item .pages { font: 11.5px var(--mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.item > div { min-width: 0; }
+.tag { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tag.check { background: var(--hl); padding: 2px 8px; border-radius: 3px; transform: rotate(-1.5deg); }
+.tag.ok { color: var(--ok); }
+.tag.fix { color: var(--pen); }
+.tag.err { color: var(--err); }
+.tag.wait { color: var(--ink-2); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.tag.wait.spin::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rule); border-top-color: var(--pen); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.qfoot { padding: 14px 18px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 8px; }
+.qfoot .row { display: flex; gap: 8px; }
+.qfoot .row .btn { flex: 1; }
+.hint { font-size: 12px; color: var(--ink-2); }
+
+.mirror { padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dochead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dochead .case { font: 600 24px var(--mono); margin-top: 4px; }
+.sheet { padding: 22px 26px; display: flex; flex-direction: column; gap: 20px; }
+.ids { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--rule); }
+.f .l { font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.f .v { font: 500 15px var(--mono); overflow-wrap: anywhere; }
+.f .v.pen { color: var(--pen); }
+.f .v.none { font: 400 13.5px var(--body); color: var(--ink-2); }
+.f .v.fixed { color: var(--pen); font-weight: 600; }
+.f .was { font: 12px var(--mono); color: var(--ink-2); text-decoration: line-through; }
+.sec { display: flex; flex-direction: column; gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.flag { border: 2px solid var(--hl); border-radius: 12px; padding: 14px 16px; background: var(--hl-soft); display: flex; flex-direction: column; gap: 10px; }
+.flag .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.flag label { font-size: 13px; font-weight: 700; }
+.pct { font: 600 12px var(--mono); color: var(--amber); }
+.flag .why { margin: 0; font-size: 13.5px; color: #3D4650; }
+.fixrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.fixrow input { width: 180px; min-height: 44px; padding: 0 12px; border: 1.5px solid var(--ink); border-radius: 8px; font: 500 18px var(--mono); background: #fff; }
+.fixrow input.bad { border-color: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 15%, transparent); }
+.inerr { font-size: 13px; font-weight: 600; color: var(--err); }
+.done-f { border: 2px solid transparent; border-radius: 12px; padding: 14px 16px; }
+.actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.scan { border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 12px; padding: 14px; min-width: 0; }
+.tabs { display: flex; gap: 4px; align-items: center; }
+.tabs button { border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; font: 600 13px var(--body); color: var(--ink-2); }
+.tabs button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
+.tabs .file { margin-left: auto; font: 12px var(--mono); color: var(--ink-2); }
+.crop { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.comb { border: 1px solid var(--rule); border-radius: 6px; padding: 14px; display: flex; gap: 4px; align-items: flex-end; justify-content: center; background: #FCFCFA; }
+.comb i { width: 30px; height: 40px; display: grid; place-items: center; border: 1.5px dotted var(--dot); font: 400 26px/1 var(--hand); font-style: normal; color: var(--pen); }
+.comb b { font: 700 22px/1 var(--mono); }
+.comb.big i { width: 62px; height: 82px; font-size: 52px; border-width: 2px; }
+.comb.big b { font-size: 40px; }
+.comb.big { padding: 28px 32px; gap: 8px; }
+.pg { flex: 1; min-height: 420px; padding: 20px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+.ln { height: 8px; border-radius: 3px; background: var(--bed); }
+.ln.d { height: 10px; background: var(--bed-2); }
+.target { margin-top: 14px; border: 2.5px solid var(--pen); border-radius: 6px; padding: 10px; box-shadow: 0 0 0 5px rgba(35,65,196,.12); display: flex; gap: 4px; height: 46px; }
+.target span { flex: 1; border: 1px dotted var(--dot); }
+.wline { display: flex; gap: 16px; margin-top: 10px; }
+.wline span { flex: 1; height: 2px; background: var(--ink); margin-top: 22px; }
+.pgno { position: absolute; right: 12px; top: 10px; font-size: 11px; font-weight: 600; color: var(--ink-2); background: #fff; padding: 4px 7px; border-radius: 5px; box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
+
+/* variant C: the table */
+.toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 28px; border-bottom: 1px solid var(--rule); }
+.toolbar .search { min-height: 40px; width: 260px; padding: 0 12px; border: 1px solid #C3CBD4; border-radius: 8px; background: #fff; font-size: 13.5px; }
+.tablewrap { overflow-x: auto; }
+table.batch { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--sheet); }
+.batch th { text-align: left; font: 650 11px/1.2 var(--display); font-stretch: 115%; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); padding: 12px 12px; border-bottom: 1.5px solid var(--ink); white-space: nowrap; position: sticky; top: 0; background: var(--sheet); }
+.batch td { padding: 9px 12px; border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent); white-space: nowrap; font-family: var(--mono); }
+.batch td.t { font-family: var(--body); }
+.batch td.q { background: color-mix(in srgb, var(--hl) 45%, var(--sheet)); font-weight: 600; }
+.batch td.q.cur { outline: 2.5px solid var(--pen); outline-offset: -2.5px; }
+.batch td.fx { color: var(--pen); font-weight: 600; }
+.batch td .n { color: var(--ink-2); font-family: var(--body); }
+.batch tr.sel td { background-color: var(--pen-soft); }
+.batch tr.sel td.q { background: color-mix(in srgb, var(--hl) 55%, var(--pen-soft)); }
+.drawer { border-left: 1px solid var(--rule); padding: 20px; display: flex; flex-direction: column; gap: 14px; background: var(--bed); }
+
+/* states */
+.intake { max-width: 1040px; margin: 0 auto; padding: 56px 28px 64px; display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; }
+.intake h1 { margin: 10px 0 16px; font: 760 42px/1.05 var(--display); font-stretch: 108%; }
+.intake h1 em { font-style: normal; color: var(--pen); }
+.intake p { margin: 0; color: var(--ink-2); font-size: 16px; }
+.keybox { margin-top: 26px; display: flex; flex-direction: column; gap: 8px; }
+.keybox .row { display: flex; gap: 8px; }
+.keybox input { flex: 1; min-height: 44px; padding: 0 12px; border: 1.5px solid var(--err); border-radius: 8px; font: 14px var(--mono); background: #fff; }
+.drop { position: relative; display: grid; place-items: center; gap: 14px; padding: 48px 28px; background: var(--sheet); border-radius: 16px; box-shadow: var(--shadow); text-align: center; opacity: .55; }
+.drop::after { content: ""; position: absolute; inset: 12px; border: 1.5px dashed var(--dot); border-radius: 10px; }
+.drop strong { display: block; font: 700 22px/1.2 var(--display); font-stretch: 108%; }
+.drop .formats { font: 12px var(--mono); color: var(--ink-2); letter-spacing: .06em; }
+.banner { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 28px; background: var(--err-soft); color: var(--err); font-weight: 600; font-size: 14px; border-bottom: 1px solid color-mix(in srgb, var(--err) 25%, transparent); }
+.banner span { color: #6E1E18; font-weight: 500; }
+.errorbox { padding: 18px 20px; border-radius: 10px; background: var(--err-soft); color: var(--err); display: flex; flex-direction: column; gap: 6px; }
+.errorbox b { font-size: 15px; }
+.errorbox span { color: #6E1E18; font-size: 14px; }
+.empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 48px 28px; }
+.empty h3 { margin: 12px 0 6px; font: 700 20px var(--display); font-stretch: 108%; }
+.empty p { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li { display: flex; align-items: center; gap: 12px; color: var(--ink-2); }
+.steps li::before { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--rule); flex: none; }
+.steps li.done::before { border-color: var(--ok); background: var(--ok); }
+.steps li.now { color: var(--ink); font-weight: 600; }
+.steps li.now::before { border-color: var(--pen); border-top-color: transparent; animation: spin .8s linear infinite; }
+.skel { display: grid; gap: 12px; }
+.skel span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--bed) 0 40%, #fff 50%, var(--bed) 60% 100%); background-size: 300% 100%; animation: shimmer 1.6s linear infinite; }
+.skel span:nth-child(2) { width: 82%; } .skel span:nth-child(3) { width: 64%; } .skel span:nth-child(4) { width: 90%; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border-radius: 10px; overflow: hidden; }
+.summary div { background: var(--sheet); padding: 16px 18px; }
+.summary b { display: block; font: 760 28px/1 var(--display); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+.summary span { font-size: 12.5px; color: var(--ink-2); }
+.choice { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border: 1.5px solid var(--rule); border-radius: 10px; background: #fff; }
+.choice.on { border-color: var(--ink); }
+.choice input { margin-top: 4px; accent-color: var(--ink); width: 16px; height: 16px; }
+.choice b { display: block; }
+.choice span { font-size: 13px; color: var(--ink-2); }
+
+@media (max-width: 1100px) {
+  .cols3 { grid-template-columns: 260px minmax(0, 1fr); }
+  .cols3 .scan { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); }
+  .states { grid-template-columns: 1fr; }
+  .intake { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .proto-nav, .proto-intro, .frame-title, .frame-wrap { padding-left: 16px; padding-right: 16px; }
+  .cols3, .cols2 { grid-template-columns: 1fr; }
+  .queue { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .ids, .grid3, .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .top, .toolbar { padding: 12px 16px; }
+  .mirror { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; } }
+</style>
+</head>
+<body>
+
+<nav class="proto-nav" aria-label="Prototip">
+  <b>LD pregled · prototip</b>
+  <a href="#a">A · Obrazec ob skenu</a>
+  <a href="#b">B · Polje za poljem</a>
+  <a href="#c">C · Tabela paketa</a>
+  <a href="#states">Stanja</a>
+</nav>
+
+<div class="proto-intro">
+  <h1>Pregled paketa za referente ZPIZ</h1>
+  <p>Tri postavitve istega dela: referent pregleda označena polja, jih potrdi ali popravi in izvozi paket. Podatki so izmišljeni, brez osebnih podatkov. Stanja na dnu so narisana na postavitvi A; za izbrano postavitev se narišejo znova.</p>
+</div>
+
+<!-- ======================================================== A -->
+<div class="frame-title" id="a"><h2>A · Obrazec ob skenu</h2><span>Današnji trije stolpci; označena polja se potrdijo ali popravijo kar na obrazcu.</span></div>
+<div class="frame-wrap"><div class="frame">
+  <header class="top">
+    <div class="brand">
+      <svg width="30" height="36" viewBox="0 0 30 36" aria-hidden="true"><path d="M2 2h19l7 7v25H2z" fill="#fff" stroke="#12161B" stroke-width="2" stroke-linejoin="round"/><path d="M21 2v7h7" fill="none" stroke="#12161B" stroke-width="2"/><rect x="6" y="7" width="7" height="7" fill="#12161B"/><path d="M14 27h10" stroke="#FFE14D" stroke-width="4"/><path d="M14 21.5h10M6 29h5" stroke="#A7B1BC" stroke-width="1.6"/></svg>
+      <div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div>
+    </div>
+    <span class="status">Bralnik deluje</span>
+    <a class="btn" href="#pomoc">Pomoč</a>
+    <button class="btn">Odjava</button>
+  </header>
+  <div class="cols3">
+    <aside class="queue">
+      <div class="qhead">
+        <div class="qcount"><b>38</b><span>od 51 pregledanih</span></div>
+        <div class="bar"><i style="width:74%"></i></div>
+        <div class="seg" role="group" aria-label="Prikaži">
+          <button>Vsi 51</button><button aria-pressed="true">Za preverbo 13</button><button>Potrjeni 38</button>
+        </div>
+      </div>
+      <div class="list" role="listbox" aria-label="Dokumenti">
+        <div class="item"><div><div class="case">10288-310/2022</div><div class="pages">00000003–04</div></div><span class="tag check">1 za preverbo</span></div>
+        <div class="item sel"><div><div class="case">10344-123/2023</div><div class="pages">00000013–14</div></div><span class="tag check">2 za preverbo</span></div>
+        <div class="item"><div><div class="case">10350-002/2023</div><div class="pages">00000015–16</div></div><span class="tag check">1 za preverbo</span></div>
+        <div class="item"><div><div class="case">10377-140/2023</div><div class="pages">00000019–20</div></div><span class="tag check">3 za preverbo</span></div>
+        <div class="item"><div><div class="case">10390-218/2023</div><div class="pages">00000025–26</div></div><span class="tag check">1 za preverbo</span></div>
+        <div class="item"><div><div class="case">10402-077/2023</div><div class="pages">00000029–30</div></div><span class="tag check">2 za preverbo</span></div>
+        <div class="item"><div><div class="case">10415-301/2023</div><div class="pages">00000033–34</div></div><span class="tag check">1 za preverbo</span></div>
+        <div class="item"><div><div class="case">10433-009/2023</div><div class="pages">00000039–40</div></div><span class="tag check">4 za preverbo</span></div>
+      </div>
+      <div class="qfoot">
+        <span class="lbl">Izvoz</span>
+        <div class="row"><button class="btn">JSON za ZPIZ</button><button class="btn">CSV</button></div>
+        <span class="hint">13 dokumentov še ni pregledanih. Izvozijo se z oznako »za preverbo«.</span>
+      </div>
+    </aside>
+
+    <main class="mirror">
+      <div class="dochead">
+        <div><span class="lbl">Dokument 7 od 51</span><div class="case">10344-123/2023</div></div>
+        <span style="font-size:14px;color:var(--ink-2)"><b style="color:var(--amber)">2 polji</b> za preverbo</span>
+      </div>
+      <div class="card sheet">
+        <div class="ids">
+          <div class="f"><div class="l">ID dokumenta · iz QR</div><div class="v">140000001</div></div>
+          <div class="f"><div class="l">VK · iz QR</div><div class="v">123456789</div></div>
+          <div class="f"><div class="l">Št. dokumentacije</div><div class="v">0100001</div></div>
+          <div class="f"><div class="l">Št. upravičenca</div><div class="v">1001000011</div></div>
+        </div>
+        <div class="sec">
+          <span class="lbl">Stran 1 · pokojnina iz druge države</span>
+          <div style="display:flex;gap:24px;align-items:center;font-size:14px;flex-wrap:wrap"><span>Prejema pokojnino iz druge države:</span><b>da</b><span style="color:var(--ink-2)">Vrstice 1–3 so prazne.</span></div>
+        </div>
+        <div class="sec">
+          <span class="lbl">Stran 2 · lastnoročno</span>
+          <div class="flag">
+            <div class="head"><label for="a-amt">Znesek</label><span class="pct">zanesljivost 70 %</span></div>
+            <div class="fixrow">
+              <input id="a-amt" value="2.500,00">
+              <button class="btn ok big">Pravilno</button>
+              <button class="btn big">Shrani popravek</button>
+            </div>
+            <p class="why">Decimalki sta zapisani kot dve odprti zanki: prebrano 00, lahko tudi 02.</p>
+          </div>
+          <div class="grid3">
+            <div class="flag">
+              <div class="head"><label for="a-cur">Valuta</label><span class="pct">86 %</span></div>
+              <div class="v mono" style="font-size:16px">SEK</div>
+              <div style="display:flex;gap:6px"><button class="btn ok">Pravilno</button><button class="btn">Popravi</button></div>
+            </div>
+            <div class="f done-f"><div class="l">Država</div><div class="v pen" style="font-size:16px;margin-top:4px">ŠVEDSKA</div></div>
+            <div class="f done-f"><div class="l">Podpis</div><div class="v none" style="margin-top:4px">ni podpisa</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="hint"><kbd>↑</kbd> <kbd>↓</kbd> prejšnji / naslednji · <kbd>Enter</kbd> potrdi</span>
+        <button class="btn dark big">Potrdi dokument in naprej →</button>
+      </div>
+    </main>
+
+    <aside class="scan">
+      <div class="tabs"><button>Stran 1</button><button aria-pressed="true">Stran 2</button><span class="file">00000014.tif</span></div>
+      <div class="card crop">
+        <span class="lbl">Izrez polja · znesek</span>
+        <div class="comb"><i>2</i><b>.</b><i>5</i><i>0</i><i>0</i><b>,</b><i>0</i><i>0</i></div>
+      </div>
+      <div class="card pg">
+        <div class="ln d" style="width:60%"></div><div class="ln d" style="width:40%"></div>
+        <div style="height:1px;background:var(--rule);margin:8px 0"></div>
+        <div class="ln" style="width:85%"></div><div class="ln" style="width:75%"></div>
+        <div class="target"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="wline"><span></span><span></span></div>
+        <div class="ln" style="width:70%;margin-top:14px"></div><div class="ln" style="width:50%"></div>
+        <span class="pgno">2 / 2 · klik za povečavo</span>
+      </div>
+    </aside>
+  </div>
+</div></div>
+
+<!-- ======================================================== B -->
+<div class="frame-title" id="b"><h2>B · Polje za poljem</h2><span>Samo vprašljiva polja, eno za drugim, z velikim izrezom. Najhitreje s tipkovnico.</span></div>
+<div class="frame-wrap"><div class="frame">
+  <header class="top">
+    <div class="brand">
+      <svg width="30" height="36" viewBox="0 0 30 36" aria-hidden="true"><path d="M2 2h19l7 7v25H2z" fill="#fff" stroke="#12161B" stroke-width="2" stroke-linejoin="round"/><path d="M21 2v7h7" fill="none" stroke="#12161B" stroke-width="2"/><rect x="6" y="7" width="7" height="7" fill="#12161B"/><path d="M14 27h10" stroke="#FFE14D" stroke-width="4"/><path d="M14 21.5h10M6 29h5" stroke="#A7B1BC" stroke-width="1.6"/></svg>
+      <div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;min-width:320px">
+      <span style="font-size:13px;color:var(--ink-2);white-space:nowrap">Preverjeno <b style="color:var(--ink)">21</b> od 56 polj</span>
+      <div class="bar" style="flex:1;height:6px;min-width:140px"><i style="width:37.5%"></i></div>
+    </div>
+    <a class="btn" href="#paket">Vsi dokumenti</a>
+    <button class="btn">Odjava</button>
+  </header>
+  <div style="flex:1;display:flex;flex-wrap:wrap;gap:28px;padding:28px;align-items:flex-start">
+    <main style="flex:999 1 720px;min-width:0;display:flex;flex-direction:column;gap:18px">
+      <div class="dochead">
+        <div><span class="lbl">Polje 22 od 56 · stran 2</span><h3 style="margin:6px 0 0;font:760 34px/1.1 var(--display);font-stretch:108%">Znesek pokojnine</h3></div>
+        <span class="pct" style="font-size:13px;background:#FFF3B0;padding:3px 9px;border-radius:4px">zanesljivost 70 %</span>
+      </div>
+      <div class="card" style="padding:28px;display:flex;flex-direction:column;gap:14px">
+        <span class="lbl">Iz skena · 00000014.tif</span>
+        <div class="comb big"><i>2</i><b>.</b><i>5</i><i>0</i><i>0</i><b>,</b><i>0</i><i>0</i></div>
+        <p class="why" style="margin:0;font-size:14px;color:#3D4650">Decimalki sta zapisani kot dve odprti zanki: prebrano <b>00</b>, lahko tudi <b>02</b>.</p>
+      </div>
+      <div class="card" style="padding:24px 28px;display:flex;flex-direction:column;gap:14px">
+        <label for="b-val" style="font-size:14px;font-weight:700">Vrednost</label>
+        <div class="fixrow">
+          <input id="b-val" value="2.500,00" style="width:260px;min-height:56px;font-size:26px;border-width:2px;border-radius:10px">
+          <button class="btn ok huge">Pravilno <kbd>Enter</kbd></button>
+          <button class="btn huge">Shrani popravek</button>
+          <button class="btn ghost huge">Preskoči <kbd>Tab</kbd></button>
+        </div>
+        <span class="hint" style="font-size:13px">Če vrednost popravite, se shrani popravek in zapiše, kaj je bilo prebrano.</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span class="lbl">Naslednja polja</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="nextf" style="display:inline-flex;gap:8px;align-items:center;padding:7px 12px;background:#fff;border:1px solid var(--rule);border-radius:8px;font-size:13px"><b>Valuta</b><span class="mono" style="color:var(--ink-2);font-size:12px">10344-123/2023</span></span>
+          <span style="display:inline-flex;gap:8px;align-items:center;padding:7px 12px;background:#fff;border:1px solid var(--rule);border-radius:8px;font-size:13px"><b>Znesek 2</b><span class="mono" style="color:var(--ink-2);font-size:12px">10350-002/2023</span></span>
+          <span style="display:inline-flex;gap:8px;align-items:center;padding:7px 12px;background:#fff;border:1px solid var(--rule);border-radius:8px;font-size:13px"><b>Država</b><span class="mono" style="color:var(--ink-2);font-size:12px">10377-140/2023</span></span>
+          <span style="display:inline-flex;gap:8px;align-items:center;padding:7px 12px;background:#fff;border:1px solid var(--rule);border-radius:8px;font-size:13px"><b>Znesek</b><span class="mono" style="color:var(--ink-2);font-size:12px">10377-140/2023</span></span>
+          <span style="display:inline-flex;gap:8px;align-items:center;padding:7px 12px;background:#fff;border:1px solid var(--rule);border-radius:8px;font-size:13px"><b>Podpis</b><span class="mono" style="color:var(--ink-2);font-size:12px">10377-140/2023</span></span>
+        </div>
+      </div>
+    </main>
+    <aside style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:12px">
+        <span class="lbl">Dokument</span>
+        <div class="mono" style="font-size:20px;font-weight:600">10344-123/2023</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;font-size:13px">
+          <div class="f"><div class="l">ID · iz QR</div><div class="v" style="font-size:13.5px">140000001</div></div>
+          <div class="f"><div class="l">VK · iz QR</div><div class="v" style="font-size:13.5px">123456789</div></div>
+          <div class="f"><div class="l">Valuta</div><div class="v" style="font-size:13.5px"><span style="background:var(--hl);padding:0 5px;border-radius:3px">SEK</span></div></div>
+          <div class="f"><div class="l">Država</div><div class="v pen" style="font-size:13.5px">ŠVEDSKA</div></div>
+          <div class="f"><div class="l">Druga država</div><div>da</div></div>
+          <div class="f"><div class="l">Podpis</div><div>ni podpisa</div></div>
+        </div>
+      </div>
+      <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px;min-height:380px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="lbl">Stran 2</span><span class="hint">kje na strani</span></div>
+        <div style="flex:1;border:1px solid var(--rule);border-radius:4px;padding:18px;display:flex;flex-direction:column;gap:10px">
+          <div class="ln d" style="width:60%"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:70%"></div>
+          <div class="target" style="height:30px;padding:0;margin-top:16px"></div>
+          <div class="wline"><span></span><span></span></div>
+          <div class="ln" style="width:55%;margin-top:18px"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div></div>
+
+<!-- ======================================================== C -->
+<div class="frame-title" id="c"><h2>C · Tabela paketa</h2><span>Ves paket kot preglednica; rumene celice so za preverbo, klik odpre izrez ob strani.</span></div>
+<div class="frame-wrap"><div class="frame">
+  <header class="top">
+    <div class="brand">
+      <svg width="30" height="36" viewBox="0 0 30 36" aria-hidden="true"><path d="M2 2h19l7 7v25H2z" fill="#fff" stroke="#12161B" stroke-width="2" stroke-linejoin="round"/><path d="M21 2v7h7" fill="none" stroke="#12161B" stroke-width="2"/><rect x="6" y="7" width="7" height="7" fill="#12161B"/><path d="M14 27h10" stroke="#FFE14D" stroke-width="4"/><path d="M14 21.5h10M6 29h5" stroke="#A7B1BC" stroke-width="1.6"/></svg>
+      <div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div>
+    </div>
+    <span class="status">Bralnik deluje</span>
+    <a class="btn" href="#pomoc">Pomoč</a>
+    <button class="btn">Odjava</button>
+  </header>
+  <div class="toolbar">
+    <div class="qcount"><b>38</b><span>od 51 pregledanih</span></div>
+    <div class="seg" role="group" aria-label="Prikaži" style="width:340px"><button>Vsi 51</button><button aria-pressed="true">Za preverbo 13</button><button>Potrjeni 38</button></div>
+    <label class="lbl" for="c-q" style="margin-left:auto">Išči</label>
+    <input class="search" id="c-q" placeholder="Številka zadeve ali datoteka">
+    <button class="btn">JSON za ZPIZ</button><button class="btn">CSV</button>
+  </div>
+  <div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 380px">
+    <div class="tablewrap">
+      <table class="batch">
+        <thead><tr><th>Zadeva</th><th>Druga drž.</th><th>Stran 1</th><th>Znesek</th><th>Valuta</th><th>Država</th><th>Podpis</th><th>Stanje</th></tr></thead>
+        <tbody>
+          <tr><td>10288-310/2022</td><td class="t">da</td><td>1.250,00 EUR · D</td><td class="q">830,00</td><td>EUR</td><td>NEMČIJA</td><td class="t">da</td><td class="t"><span class="tag check">1</span></td></tr>
+          <tr class="sel"><td>10344-123/2023</td><td class="t">da</td><td><span class="n">prazno</span></td><td class="q cur">2.500,00</td><td class="q">SEK</td><td>ŠVEDSKA</td><td class="t">ne</td><td class="t"><span class="tag check">2</span></td></tr>
+          <tr><td>10350-002/2023</td><td class="t">da</td><td>412,40 CHF · CH</td><td><span class="n">prazno</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td class="q t">?</td><td class="t"><span class="tag check">1</span></td></tr>
+          <tr><td>10377-140/2023</td><td class="t">da</td><td><span class="n">prazno</span></td><td class="q">1.903,00</td><td>RSD</td><td class="q">СРБИЈА</td><td class="q t">?</td><td class="t"><span class="tag check">3</span></td></tr>
+          <tr><td>10390-218/2023</td><td class="t">ne</td><td><span class="n">prazno</span></td><td><span class="n">prazno</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td class="q t">?</td><td class="t"><span class="tag check">1</span></td></tr>
+          <tr><td>10402-077/2023</td><td class="t">da</td><td class="q">96,10 EUR · A</td><td><span class="n">prazno</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td class="t">da</td><td class="t"><span class="tag check">2</span></td></tr>
+          <tr><td>10415-301/2023</td><td class="t">da</td><td><span class="n">prazno</span></td><td class="fx">640,00</td><td>MKD</td><td>MAKEDONIJA</td><td class="t">da</td><td class="t"><span class="tag fix">Popravljeno</span></td></tr>
+          <tr><td>10433-009/2023</td><td class="t">da</td><td>2.118,00 EUR · I</td><td class="q">75,00</td><td class="q">AUD</td><td class="q">AVSTRALIJA</td><td class="q t">?</td><td class="t"><span class="tag check">4</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <aside class="drawer">
+      <div><span class="lbl">10344-123/2023 · stran 2</span><h3 style="margin:6px 0 0;font:700 22px var(--display);font-stretch:108%">Znesek</h3></div>
+      <div class="card crop"><div class="comb"><i>2</i><b>.</b><i>5</i><i>0</i><i>0</i><b>,</b><i>0</i><i>0</i></div></div>
+      <p class="why" style="margin:0;font-size:13.5px;color:#3D4650">Decimalki sta zapisani kot dve odprti zanki: prebrano 00, lahko tudi 02. <span class="pct">70 %</span></p>
+      <label for="c-val" style="font-size:13px;font-weight:700">Vrednost</label>
+      <div class="fixrow"><input id="c-val" value="2.500,00" style="width:100%"></div>
+      <div style="display:flex;gap:8px"><button class="btn ok big" style="flex:1">Pravilno</button><button class="btn big" style="flex:1">Shrani popravek</button></div>
+      <span class="hint"><kbd>Tab</kbd> naslednja rumena celica</span>
+    </aside>
+  </div>
+</div></div>
+
+<!-- ======================================================== states -->
+<div class="frame-title" id="states"><h2>Stanja</h2><span>Na postavitvi A. Brez strani in ostranjevanja (seznam se pomika) in brez vlog (en ključ, isti pravice za vse).</span></div>
+<div class="frame-wrap">
+  <div class="states">
+
+    <div>
+      <p class="state-cap">1 · Začetek, ključ napačen (prazno stanje)</p>
+      <div class="frame">
+        <header class="top">
+          <div class="brand"><div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div></div>
+          <span class="status">Bralnik deluje</span>
+        </header>
+        <div class="intake" style="grid-template-columns:1fr;max-width:620px;padding:36px 28px">
+          <div>
+            <span class="lbl">ZPIZ · LD obrazci</span>
+            <h1>Iz skena v podatke, <em>polje za poljem.</em></h1>
+            <p>Naložite skene izjav. Prebrali bomo kljukice, rokopis in QR kodo. Kar ni povsem jasno, je označeno, da ga preverite.</p>
+            <div class="keybox">
+              <label class="lbl" for="s1-key">Ključ za dostop</label>
+              <div class="row"><input id="s1-key" type="password" value="zpiz-0000000000"><button class="btn dark big">Prijava</button></div>
+              <span class="inerr">Ključ ni pravilen. Nov ključ dobite pri skrbniku sistema.</span>
+            </div>
+          </div>
+          <div class="drop"><strong>Povlecite skene sem</strong><span class="hint">Najprej se prijavite s ključem.</span><span class="formats">TIFF · PDF · PNG · JPG · ZIP</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="state-cap">2 · Nalaganje in branje (nalaganje)</p>
+      <div class="frame">
+        <header class="top"><div class="brand"><div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div></div><span class="status">Bralnik deluje</span></header>
+        <div class="cols2">
+          <aside class="queue">
+            <div class="qhead">
+              <div class="qcount"><b>9</b><span>od 51 prebranih</span></div>
+              <div class="bar pen"><i style="width:18%"></i></div>
+              <span class="hint">Berejo se 3 naenkrat · še približno 3 min</span>
+            </div>
+            <div class="list">
+              <div class="item"><div><div class="case">10433-009/2023</div><div class="pages">00000039–40</div></div><span class="tag check">4 za preverbo</span></div>
+              <div class="item sel"><div><div class="case">10441-112/2023</div><div class="pages">00000041–42</div></div><span class="tag wait spin">bere rokopis</span></div>
+              <div class="item"><div><div class="case">10446-005/2023</div><div class="pages">00000043–44</div></div><span class="tag wait spin">bere stran 1</span></div>
+              <div class="item"><div><div class="case">—</div><div class="pages">00000045–46</div></div><span class="tag wait">v vrsti</span></div>
+              <div class="item"><div><div class="case">—</div><div class="pages">00000047–48</div></div><span class="tag wait">v vrsti</span></div>
+            </div>
+          </aside>
+          <main class="mirror">
+            <div class="dochead"><div><span class="lbl">Dokument 11 od 51</span><div class="case">10441-112/2023</div></div><span class="mono" style="color:var(--pen)">0:06</span></div>
+            <div class="card sheet">
+              <ul class="steps">
+                <li class="done">Poravnava strani</li><li class="done">QR koda: ID in VK</li><li class="done">Kljukice in številke v glavi</li>
+                <li class="now">Rokopis na strani 2</li><li>Preverjanje</li>
+              </ul>
+              <div class="skel"><span></span><span></span><span></span><span></span></div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="state-cap">3 · Napake: bralnik ne deluje, dokument ni berljiv, napačen popravek</p>
+      <div class="frame">
+        <header class="top"><div class="brand"><div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div></div><span class="status down">Bralnik ne deluje</span></header>
+        <div class="banner">Bralnik ni dosegljiv. <span>12 dokumentov čaka v vrsti in se prebere, ko bo spet deloval.</span><button class="btn">Poskusi znova</button></div>
+        <div class="cols2">
+          <aside class="queue">
+            <div class="list">
+              <div class="item"><div><div class="case">10344-123/2023</div><div class="pages">00000013–14</div></div><span class="tag check">2 za preverbo</span></div>
+              <div class="item sel"><div><div class="case">10450-031/2023</div><div class="pages">00000031</div></div><span class="tag err">Ni strani 2</span></div>
+              <div class="item"><div><div class="case">—</div><div class="pages">porocilo.docx</div></div><span class="tag err">Ni sken</span></div>
+              <div class="item"><div><div class="case">—</div><div class="pages">00000049–50</div></div><span class="tag wait">čaka bralnik</span></div>
+            </div>
+          </aside>
+          <main class="mirror">
+            <div class="errorbox"><b>Dokumenta ni bilo mogoče prebrati v celoti.</b><span>Stran 2 manjka: za 00000031.tif (stran 1) pride spet stran 1. Stran 1 je prebrana; stran 2 skenirajte in naložite znova.</span></div>
+            <div class="errorbox"><b>porocilo.docx ni sken.</b><span>Sprejmemo TIFF, PDF, PNG, JPG ali ZIP s temi datotekami.</span></div>
+            <div class="flag">
+              <div class="head"><label for="s3-amt">Znesek · 10344-123/2023</label><span class="pct">70 %</span></div>
+              <div class="fixrow"><input id="s3-amt" class="bad" value="2500.0O" aria-invalid="true" aria-describedby="s3-err"><button class="btn big">Shrani popravek</button></div>
+              <span class="inerr" id="s3-err">Znesek zapišite s številkami, npr. 2.500,02.</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="state-cap">4 · Dolga besedila, filter brez zadetkov, paket z enim dokumentom</p>
+      <div class="frame">
+        <header class="top"><div class="brand"><div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div></div><span class="status">Bralnik deluje</span></header>
+        <div class="cols2">
+          <aside class="queue">
+            <div class="qhead">
+              <div class="qcount"><b>1</b><span>od 1 pregledan</span></div>
+              <div class="bar"><i style="width:100%"></i></div>
+              <div class="seg"><button>Vsi 1</button><button aria-pressed="true">Za preverbo 0</button><button>Potrjeni 1</button></div>
+            </div>
+            <div class="empty" style="padding:28px 18px">
+              <div><h3>Ni dokumentov za preverbo</h3><p>Edini dokument v paketu je potrjen.</p><button class="btn">Pokaži vse</button></div>
+            </div>
+          </aside>
+          <main class="mirror">
+            <div class="dochead"><div><span class="lbl">Dokument 1 od 1</span><div class="case">10512-1044/2023</div></div><span class="tag ok">Potrjeno</span></div>
+            <div class="card sheet">
+              <div class="grid3">
+                <div class="f"><div class="l">Država</div><div class="v pen">BOSNA IN HERCEGOVINA</div></div>
+                <div class="f"><div class="l">Država · kot napisano</div><div class="v pen">РЕПУБЛИКА СРБИЈА</div></div>
+                <div class="f"><div class="l">Valuta</div><div class="v fixed">BAM</div><div class="was">KM</div></div>
+              </div>
+              <div class="f"><div class="l">Datoteki</div><div class="v" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="ZPIZ_LD_skeniranje_2023-10-14_paket-03_00000101.tif">ZPIZ_LD_skeniranje_2023-10-14_paket-03_00000101.tif, ZPIZ_LD_skeniranje_2023-10-14_paket-03_00000102.tif</div></div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div style="grid-column:1/-1">
+      <p class="state-cap">5 · Vse pregledano, izvoz (polno stanje)</p>
+      <div class="frame short">
+        <header class="top"><div class="brand"><div><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></div></div><span class="status">Bralnik deluje</span><button class="btn">Nove datoteke</button></header>
+        <div style="max-width:860px;margin:0 auto;padding:36px 28px 44px;display:flex;flex-direction:column;gap:20px;width:100%">
+          <div><span class="lbl">ld_test.zip · 102 strani</span><h3 style="margin:6px 0 0;font:760 30px/1.1 var(--display);font-stretch:108%">Vseh 51 dokumentov je pregledanih</h3></div>
+          <div class="summary">
+            <div><b>51</b><span>dokumentov</span></div>
+            <div><b>38</b><span>brez sprememb</span></div>
+            <div><b>17</b><span>popravljenih polj</span></div>
+            <div><b>0</b><span>z napako</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label class="choice on"><input type="radio" name="fmt" checked><div><b>JSON za ZPIZ</b><span>LDDokumentP1 + LDDokumentP2, s popravki. Pri vsakem popravljenem polju je zapisano, kaj je bilo prebrano.</span></div></label>
+            <label class="choice"><input type="radio" name="fmt"><div><b>CSV</b><span>En dokument v vrstici, za Excel. Stolpec »preveril« pove, katera polja je potrdil referent.</span></div></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="hint">Rezultati se na strežniku izbrišejo po 7 dneh.</span>
+            <button class="btn dark big">Prenesi JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div style="height:80px"></div>
+</body>
+</html>

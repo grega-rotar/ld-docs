@@ -6,6 +6,13 @@ API at **https://ld-docs.etiam.si** that reads ZPIZ "Izjava o višini tuje pokoj
 - Claude (through claude-pool) reads the case number, the ticked boxes and the handwriting. Each document is one locked-down `claude -p` run: it may only `Read` its two page images, and it has to answer in a JSON schema (`app/extract.py`, prompt in `app/prompt.md`).
 - The forms can be in any language or script (Swedish, French, Serbian Cyrillic …). The layout is the same.
 
+## Running at ZPIZ (on-premises)
+ZPIZ runs its own copy on one Linux VM: two containers (`api` + `reader`, no GPU) from [`deploy/zpiz/`](deploy/zpiz/),
+reading only with the local reader (`READERS=local`), whose vision model is Qwen3.6 on ZPIZ's OpenShift AI (vLLM).
+Scans stay on the VM; only crops of the handwritten fields go to the vLLM endpoint inside ZPIZ's network.
+- [docs/zpiz-namestitev.md](docs/zpiz-namestitev.md): install and operation, for ZPIZ IT (Slovenian).
+- [docs/navodila-za-referente.md](docs/navodila-za-referente.md): the review page, for clerks (Slovenian).
+
 ## API
 
 A simple upload page is at `/`: enter the API key, drop the scans, and download the results as JSON. Every `/v1` call needs `Authorization: Bearer <API key>`. Interactive docs are at `/docs`.
@@ -79,6 +86,45 @@ curl -H "Authorization: Bearer $KEY" https://ld-docs.etiam.si/v1/batch/3f2a…
 
 Results are kept for `JOB_TTL_DAYS` (7), then deleted, because they hold personal data.
 
+### Review and export: `PATCH /v1/batch/{job_id}/documents/{index}` + `GET /v1/batch/{job_id}/export`
+A clerk confirms or corrects fields of a done document (`index` = its position in `documents`), and confirms the
+document. Each correction is saved to the job file at once; `GET /v1/batch/{id}` returns it.
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"fields": {"amount": {"action": "corrected", "value": 2500.02}, "currency": {"action": "confirmed"}}, "confirm": true}' \
+  https://ld-docs.etiam.si/v1/batch/3f2a…/documents/0
+```
+```json
+{"amount": 2500.02, "...": "...",
+ "review": {"status": "confirmed", "confirmed_at": 1793131044.2,
+            "fields": {"amount": {"action": "corrected", "read": 2500.0, "value": 2500.02, "at": 1793131040.1},
+                       "currency": {"action": "confirmed", "read": "SEK", "value": "SEK", "at": 1793131041.0}}}}
+```
+- `fields`: any of the 17 fields, each `{"action": "confirmed"}` or `{"action": "corrected", "value": …}` with the
+  field's type (number, string, boolean) or `null`. A correction replaces the top-level value; `read` keeps what
+  the reader produced. Correcting back to `read` is stored as `confirmed`.
+- `confirm: true` marks the document confirmed (flagged fields not acted on count as confirmed); `confirm: false`
+  re-opens it. Both parts are optional.
+- `400` for an unknown field or a value of the wrong type (the field is named), `404` for an unknown job or index,
+  `409` when the document isn't `done`.
+
+```bash
+curl -OJ -H "Authorization: Bearer $KEY" "https://ld-docs.etiam.si/v1/batch/3f2a…/export?format=json"   # ld-3f2a….json
+curl -OJ -H "Authorization: Bearer $KEY" "https://ld-docs.etiam.si/v1/batch/3f2a…/export?format=csv"    # ld-3f2a….csv
+```
+- `json`: `{"job_id", "exported_at", "documents": [...]}`, each document with the 17 fields (corrections applied),
+  `document_id`, `vk`, `pages`, `status`, `reviewed`, `corrections` (`{"amount": {"read": 2500.0, "value": 2500.02}}`),
+  `uncertain_fields`, `notes`, `warnings`, `error`. Each validates as `LDDokumentP1`/`LDDokumentP2`.
+- `csv`: for Slovenian Excel (UTF-8 with BOM, `;`, decimal comma), one row per document:
+  `case_number;document_id;vk;<the other fields>;reviewed;corrected_fields;uncertain_fields;pages;status;error`.
+- Works at any time; documents not yet done are included with their status. Unknown `format` is `400`.
+
+### Health: `GET /health`
+No key needed. `{"ok": true, "reader": "local", "readers": ["local", "claude"], "local": {"ok": true, "model": "…"}}`.
+`local` is there when the local reader is enabled: `ok` is `false` when the reader is unreachable or its vision model
+isn't loaded (checked with a 3 s timeout, cached 15 s). The upload page then shows "Bralnik ne deluje".
+
 ## Local reader (no Claude, no per-document cost)
 With `READER_URL` set, the API sends each document to `reader/` instead of Claude: a service on a machine with
 an NVIDIA GPU (a laptop with an RTX 4080 12 GB is enough), reached through a Cloudflare Tunnel. The API, the
@@ -118,6 +164,27 @@ docker compose -f reader/compose.yml up -d --build   # first start pulls the mod
 | `READER_PARALLEL` | optional, documents read at once, default 2 |
 
 Nothing listens on the machine's own network: the tunnel is the only way in, and every call needs a key.
+
+### Vision model on an OpenAI-compatible server (vLLM)
+Instead of Ollama on a GPU, the reader can send its crops to any OpenAI-compatible server, such as vLLM on
+OpenShift AI (that is how it runs at ZPIZ, with Qwen3.6-35B-A3B; see `deploy/zpiz/`). Then the reader needs no GPU.
+
+| Variable | Default | |
+|---|---|---|
+| `VLM_API` | `ollama` | `openai` = any OpenAI-compatible server (vLLM, OpenShift AI MaaS) |
+| `VLM_URL` | | `openai`: base URL ending in `/v1`, e.g. `https://<model-route>.apps.<cluster>.<domain>/v1` |
+| `VLM_KEY` | | `openai`: sent as `Authorization: Bearer …` (service-account token or MaaS key) |
+| `VLM_MODEL` | `qwen3-vl:8b-instruct` | the model id; `redhataiqwen36-35b-a3b` at ZPIZ |
+| `VLM_CA_BUNDLE` | (system CAs) | path to a PEM with the server's CA |
+| `VLM_VERIFY_TLS` | `1` | `0` turns TLS verification off (last resort; a warning is logged at start) |
+| `VLM_TIMEOUT` | `120` | seconds per vision-model call |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | only for `VLM_API=ollama` (the compose file sets `http://ollama:11434`) |
+
+With `openai`, each call is one `POST {VLM_URL}/chat/completions` with the crop as a `data:image/png;base64,…`
+`image_url`, `temperature: 0`, the same token budget as with Ollama and thinking off
+(`chat_template_kwargs.enable_thinking: false`; any `<think>…</think>` in the answer is removed). The reader's
+`/health` reports `model_loaded` from `GET {VLM_URL}/models`. A 5xx from the model makes `/v1/read` answer 503.
+The prompts were tuned on Qwen3-VL 8B: run `reader.evaluate` (below) with a new model before trusting it.
 On the server, set `READER_URL=https://ld-reader.etiam.si` and `READER_KEY=<one of READER_KEYS>` in
 `/srv/ld-docs/.env` and restart. Without `READER_URL` the API uses Claude as before.
 If the reader is down, `/v1/extract` answers 503 and batch documents get `status: error`; send them again later.
@@ -185,6 +252,7 @@ python -m reader.training.finetune_digits results/cells.npz                     
 | `MAX_PARALLEL_SINGLE` | `4` | `/v1/extract` runs at once per reader, on their own slots so they never wait behind a batch (Cloudflare cuts a request after ~100 s) |
 | `JOB_TTL_DAYS` | `7` | |
 | `READER_URL` | (none: Claude reads) | the local reader, e.g. `https://ld-reader.etiam.si` (see "Local reader"); it becomes the default reader |
+| `READERS` | (unset: `local,claude` with `READER_URL`, else `claude`) | comma list of the readers offered. `local` (ZPIZ): only the local reader, `reader=claude`/`both` is `400`, claude is never started; the app refuses to start without `READER_URL` |
 | `LOCAL_PARALLEL` | `3` | batch documents sent to the local reader at once |
 | `READER_KEY` | | one of the reader's `READER_KEYS` |
 
@@ -200,11 +268,11 @@ docker run --rm -v "$PWD:/src:ro" -w /src --entrypoint sh ld-docs:dev -c \
 `ld_test/` (ZPIZ's sample scans) holds personal data and is git-ignored. Never commit scans or results.
 
 ## Deploy
-Same setup as rokomet-stats: push to `main` → GitHub Actions runs the tests in the image → pushes `ghcr.io/grega-rotar/ld-docs:<sha>` → SSHes to t4a as `deploy` and runs `docker compose up -d` in `/srv/ld-docs` → waits for `https://ld-docs.etiam.si/health`.
+Same setup as rokomet-stats: push to `main` → GitHub Actions runs the tests in the image → pushes `ghcr.io/grega-rotar/ld-docs:<sha>` and `ghcr.io/grega-rotar/ld-reader:<sha>` (both also `:latest`; the reader image is for ZPIZ, not deployed here) → SSHes to t4a as `deploy` and runs `docker compose up -d` in `/srv/ld-docs` → waits for `https://ld-docs.etiam.si/health`.
 Rollback: run the workflow by hand with `tag=<older sha>`.
 
 One-time setup:
 1. Repo secrets `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` (the same values as rokomet-stats).
 2. On t4a: `/srv/ld-docs` (owner `deploy`) with `.env` (`API_KEYS=…`, mode 600) and `claude-pool/` (copy of `/srv/rokomet-stats/claude-pool`, mode 600, owner uid 1000).
-3. After the first image push: make the GHCR package `ld-docs` public (package settings), so t4a can pull without logging in.
+3. After the first image push: make the GHCR packages `ld-docs` and `ld-reader` public (package settings), so t4a and ZPIZ can pull without logging in.
 4. Cloudflare: `A ld-docs.etiam.si → 77.42.42.60`, proxied. The `*.etiam.si` origin certificate on the edge Traefik already covers it.

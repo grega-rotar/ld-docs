@@ -7,7 +7,7 @@
 <title>LD dokumenti</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@300..600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@300..600&display=swap" rel="stylesheet">
 <!-- In-browser TIFF previews (the scans are CCITT G4 TIFFs) and ZIP unpacking. -->
 <script src="https://cdn.jsdelivr.net/npm/pako@1.0.11/dist/pako_inflate.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
@@ -15,20 +15,10 @@
 <style>
 :root {
   /* scanner glass, the sheet, printed ink, ballpoint, the clerk's highlighter */
-  --bed: #E9EDF2;
-  --bed-2: #DFE5EC;
-  --sheet: #FFFFFF;
-  --ink: #12161B;
-  --ink-2: #5A6470;
-  --ink-3: #8A94A0;
-  --rule: #D5DCE3;
-  --dot: #A7B1BC;
-  --pen: #2341C4;
-  --pen-soft: #E6EBFC;
-  --hl: #FFE14D;
-  --amber: #A86A00;
-  --err: #B8322A;
-  --ok: #1E7A4C;
+  --bed: #E9EDF2; --bed-2: #DFE5EC; --sheet: #FFFFFF;
+  --ink: #12161B; --ink-2: #5A6470; --ink-3: #8A94A0; --rule: #D5DCE3; --dot: #A7B1BC;
+  --pen: #2341C4; --pen-soft: #E6EBFC; --hl: #FFE14D; --hl-soft: #FFFBE0;
+  --amber: #8A5600; --err: #B8322A; --err-soft: #FBECEA; --ok: #1E7A4C;
   --shadow: 0 1px 0 rgba(18,22,27,.04), 0 14px 34px -18px rgba(18,22,27,.30);
   --ease: cubic-bezier(.2,.7,.2,1);
   --display: "Archivo", system-ui, sans-serif;
@@ -38,115 +28,113 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 html { scroll-behavior: smooth; }
-body {
-  background: var(--bed); color: var(--ink);
-  font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; min-height: 100vh;
-}
-:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; border-radius: 4px; }
-button { font: inherit; color: inherit; }
+body { background: var(--bed); color: var(--ink); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+:focus-visible { outline: 2.5px solid var(--pen); outline-offset: 2px; }
+button, input { font: inherit; color: inherit; }
 a { color: var(--pen); }
-.label { font: 650 11px/1.2 var(--display); font-stretch: 115%; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+[hidden] { display: none !important; }
+.mono { font-family: var(--mono); }
+.lbl { font: 650 11px/1.2 var(--display); font-stretch: 115%; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+kbd { font: 11px var(--mono); border: 1px solid #C3CBD4; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); color: var(--ink); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hint { font-size: 12px; color: var(--ink-2); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; border: 1px solid #C3CBD4;
+  background: var(--sheet); border-radius: 8px; padding: 0 14px; font: 600 13.5px var(--body); color: var(--ink); cursor: pointer;
+  text-decoration: none; white-space: nowrap; transition: border-color .2s, transform .15s, background .2s;
+}
+.btn:hover { border-color: var(--ink-2); }
+.btn:active { transform: scale(.98); }
+.btn.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+.btn.dark:hover { background: #262C34; }
+.btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
+.btn.ghost:hover { color: var(--ink); background: var(--bed-2); }
+.btn.big { min-height: 44px; padding: 0 20px; }
+.btn kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
+.card { background: var(--sheet); border-radius: 14px; box-shadow: var(--shadow); }
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--bed-2); }
+.seg button {
+  flex: 1; min-height: 40px; border: 0; background: transparent; padding: 0 8px; border-radius: 6px; cursor: pointer;
+  font: 600 12.5px var(--body); color: var(--ink-2); white-space: nowrap; transition: background .2s, color .2s, box-shadow .2s;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
+.bar { position: relative; height: 4px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .6s var(--ease); }
+.bar.pen i { background: var(--pen); }
+.bar.live::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: sweep 1.4s linear infinite; }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- header ---------- */
 .top {
-  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
   padding: 14px 28px; background: color-mix(in srgb, var(--bed) 86%, transparent); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--rule);
 }
-.home {
-  display: flex; align-items: center; gap: 12px; margin-right: auto; padding: 4px 6px 4px 0;
-  border: 0; background: none; cursor: pointer; text-align: left;
-}
+.home { display: flex; align-items: center; gap: 12px; margin-right: auto; padding: 4px 6px 4px 0; border: 0; background: none; cursor: pointer; text-align: left; }
 .home svg { width: 30px; height: 36px; flex: none; transition: transform .3s var(--ease); }
 .home:hover svg { transform: rotate(-4deg) translateY(-1px); }
 .home b { display: block; font: 800 19px/1 var(--display); font-stretch: 125%; letter-spacing: .02em; text-transform: uppercase; }
 .home small { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-2); }
-.navlink {
-  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
-  color: var(--ink); text-decoration: none; font-size: 13.5px; font-weight: 600; transition: background .2s;
-}
-.navlink:hover { background: var(--bed-2); }
-.navlink span { color: var(--ink-3); transition: transform .2s var(--ease); }
-.navlink:hover span { transform: translate(2px, -2px); }
-.key { display: flex; align-items: center; gap: 10px; }
-.key input {
-  width: 230px; padding: 8px 12px 8px 30px; border: 1px solid var(--rule); border-radius: 8px;
-  background: var(--sheet) no-repeat 11px 50%; color: var(--ink); font: 13px var(--mono); transition: border-color .2s;
-}
-.key input:focus { border-color: var(--pen); outline: none; }
-.key .wrap { position: relative; }
-.key .wrap::before {
-  content: ""; position: absolute; left: 12px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%;
-  background: var(--dot); transition: background .3s;
-}
-.readers { display: none; align-items: center; gap: 10px; }
-.readers.on { display: flex; }
-.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--bed-2); }
-.seg button {
-  border: 0; background: transparent; padding: 5px 11px; border-radius: 6px; cursor: pointer;
-  font: 600 12.5px var(--body); color: var(--ink-2); transition: background .2s, color .2s, box-shadow .2s;
-}
-.seg button:hover { color: var(--ink); }
-.seg button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.status.down { color: var(--err); font-weight: 600; }
+.status.down::before { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
+.readers { display: flex; align-items: center; gap: 10px; }
+.readers .seg button { padding: 0 11px; }
 body.working .readers { pointer-events: none; opacity: .55; }
-.key.on .wrap::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.banner {
+  display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 28px;
+  background: var(--err-soft); color: var(--err); font-weight: 600; font-size: 14px; border-bottom: 1px solid color-mix(in srgb, var(--err) 25%, transparent);
+}
+.banner p { margin: 0; }
+.banner span { color: #6E1E18; font-weight: 500; }
 
 /* ---------- start screen ---------- */
-.intake { max-width: 1120px; margin: 0 auto; padding: 64px 28px 72px; }
-.hero { display: grid; grid-template-columns: 1fr 1.05fr; gap: 56px; align-items: center; }
-.pitch h1 { margin: 10px 0 18px; font: 760 46px/1.04 var(--display); font-stretch: 108%; letter-spacing: -.01em; }
-.pitch h1 em { font-style: normal; color: var(--pen); }
-.pitch p { margin: 0; max-width: 470px; font-size: 16.5px; color: var(--ink-2); }
-.facts { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 10px; }
-.facts li { display: flex; gap: 12px; align-items: baseline; font-size: 14.5px; }
-.facts b { min-width: 74px; font: 600 14px var(--mono); color: var(--pen); }
+.intake { max-width: 1120px; margin: 0 auto; padding: 56px 28px 64px; display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; }
+.intake h1 { margin: 10px 0 16px; font: 760 42px/1.05 var(--display); font-stretch: 108%; letter-spacing: -.01em; }
+.intake h1 em { font-style: normal; color: var(--pen); }
+.intake p { margin: 0; max-width: 470px; color: var(--ink-2); font-size: 16px; }
+.keybox { margin-top: 26px; display: flex; flex-direction: column; gap: 8px; max-width: 470px; }
+.keybox .row { display: flex; gap: 8px; }
+.keybox input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1.5px solid #C3CBD4; border-radius: 8px; font: 14px var(--mono); background: #fff; }
+.keybox input:focus { border-color: var(--pen); outline: none; box-shadow: 0 0 0 3px var(--pen-soft); }
+.keybox input[aria-invalid="true"] { border-color: var(--err); }
+.signed { margin-top: 26px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+.signed::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.inerr { font-size: 13px; font-weight: 600; color: var(--err); }
 
 .drop {
-  position: relative; display: grid; place-items: center; gap: 18px; padding: 34px 28px 28px; cursor: pointer;
-  background: var(--sheet); border-radius: 16px; box-shadow: var(--shadow);
-  transition: transform .35s var(--ease), box-shadow .35s var(--ease);
+  position: relative; display: grid; place-items: center; gap: 16px; padding: 34px 28px 28px; cursor: pointer; text-align: center;
+  background: var(--sheet); border-radius: 16px; box-shadow: var(--shadow); transition: transform .35s var(--ease), box-shadow .35s var(--ease), opacity .3s;
 }
-.drop::after {
-  content: ""; position: absolute; inset: 12px; border: 1.5px dashed var(--dot); border-radius: 10px; pointer-events: none;
-  transition: border-color .25s, inset .35s var(--ease);
-}
+.drop::after { content: ""; position: absolute; inset: 12px; border: 1.5px dashed var(--dot); border-radius: 10px; pointer-events: none; transition: border-color .25s, inset .35s var(--ease); }
 .drop:hover { transform: translateY(-2px); }
-.drop:hover::after, .drop.over::after { border-color: var(--pen); }
+.drop:hover::after, .drop.over::after, .drop:focus-within::after { border-color: var(--pen); }
 .drop.over { transform: scale(1.015); box-shadow: 0 0 0 4px var(--pen-soft), var(--shadow); }
 .drop.over::after { inset: 8px; }
-.form-art { width: 210px; height: auto; filter: drop-shadow(0 10px 18px rgba(18,22,27,.12)); transform: rotate(-2deg); transition: transform .4s var(--ease); }
-.drop:hover .form-art, .drop.over .form-art { transform: rotate(0) translateY(-3px); }
+.drop.off { opacity: .55; cursor: default; transform: none; }
+.drop.off::after { border-color: var(--dot); }
+.drop.off .form-art .beam { animation: none; opacity: 0; }
+.drop strong { display: block; font: 700 22px/1.2 var(--display); font-stretch: 108%; }
+.drop .cta span { display: block; margin-top: 6px; color: var(--ink-2); font-size: 14px; }
+.drop .formats { font: 12px var(--mono); color: var(--ink-2); letter-spacing: .06em; }
+.form-art { width: 190px; height: auto; filter: drop-shadow(0 10px 18px rgba(18,22,27,.12)); transform: rotate(-2deg); transition: transform .4s var(--ease); }
+.drop:not(.off):hover .form-art, .drop.over .form-art { transform: rotate(0) translateY(-3px); }
 .form-art .beam { animation: beam 3.2s var(--ease) infinite; }
 .drop.over .form-art .beam { animation-duration: 1.2s; }
 @keyframes beam { 0% { transform: translateY(-20px); opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(262px); opacity: 0; } }
-.drop .cta { text-align: center; }
-.drop .cta strong { display: block; font: 700 22px/1.2 var(--display); font-stretch: 108%; }
-.drop .cta span { display: block; margin-top: 6px; color: var(--ink-2); font-size: 14px; }
-.drop .formats { font: 12px var(--mono); color: var(--ink-3); letter-spacing: .06em; }
 
-.dev { margin-top: 56px; display: grid; grid-template-columns: 1fr 1.6fr; gap: 28px; align-items: center; padding: 26px 28px; background: var(--sheet); border-radius: 14px; box-shadow: var(--shadow); }
-.dev h2 { margin: 6px 0 8px; font: 700 20px/1.2 var(--display); font-stretch: 108%; }
-.dev p { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; }
-.dev pre { margin: 0; padding: 16px 18px; background: #12161B; color: #D9E0E8; border-radius: 10px; overflow-x: auto; font: 12.5px/1.65 var(--mono); }
-.dev pre .k { color: #9FB2FF; } .dev pre .s { color: #FFE14D; }
-.btn {
-  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); background: var(--sheet); border-radius: 8px;
-  padding: 8px 13px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; color: var(--ink);
-  transition: border-color .2s, transform .15s, background .2s;
-}
-.btn:hover { border-color: var(--ink-3); }
-.btn:active { transform: scale(.98); }
-.btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
-.btn.primary:hover { background: #262C34; }
-.btn:disabled { opacity: .45; cursor: default; }
-
-/* ---------- work screen ---------- */
-.work { display: none; grid-template-columns: 290px minmax(600px, 1.35fr) minmax(300px, .75fr); }
-/* The work screen is exactly one screen tall: the header takes what it needs, the three columns get the
-   rest and scroll on their own, so the page itself never scrolls. */
-@media (min-width: 1181px) {
+/* ---------- work screen: queue | form | scan ---------- */
+.work { display: none; grid-template-columns: 300px minmax(0, 1.3fr) minmax(0, 1fr); }
+@media (min-width: 1101px) {
+  /* exactly one screen tall: the three columns scroll on their own, the page never does */
   body.working { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-  body.working .top { flex: none; }
+  body.working .top, body.working .banner { flex: none; }
   body.working .work { flex: 1; min-height: 0; }
 }
 .screen-enter { animation: enter .45s var(--ease) both; }
@@ -154,201 +142,165 @@ body.working .readers { pointer-events: none; opacity: .55; }
 body.working .intake { display: none; }
 body.working .work { display: grid; }
 
-.queue { border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-height: 0; }
-.qhead { padding: 18px 18px 14px; border-bottom: 1px solid var(--rule); }
+.queue { border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.qhead { padding: 18px 18px 14px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 12px; }
 .qcount { display: flex; align-items: baseline; gap: 8px; }
 .qcount b { font: 760 30px/1 var(--display); font-stretch: 112%; font-variant-numeric: tabular-nums; }
 .qcount span { color: var(--ink-2); font-size: 13px; }
-.qcount .timer { margin-left: auto; font: 500 13px var(--mono); color: var(--ink-2); }
-.bar { position: relative; height: 4px; background: var(--rule); border-radius: 3px; margin: 14px 0 12px; overflow: hidden; }
-.bar span { display: block; height: 100%; width: 0; background: var(--pen); border-radius: 3px; transition: width .6s var(--ease); }
-.bar.live::after {
-  content: ""; position: absolute; inset: 0; width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: sweep 1.4s linear infinite;
-}
-@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
-.qstats { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink-2); }
-.qstats b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
-.totals { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border-radius: 8px; overflow: hidden; }
-.totals div { background: var(--bed); padding: 8px 10px; }
-.totals b { display: block; font: 600 13.5px var(--mono); font-variant-numeric: tabular-nums; }
-.totals span { font-size: 10.5px; color: var(--ink-3); }
-.qactions { display: flex; gap: 8px; margin-top: 12px; }
-.list { overflow-y: auto; flex: 1; padding: 6px; }
+.list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
 .item {
-  position: relative; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; text-align: left;
-  padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; cursor: pointer;
-  transition: background .2s, box-shadow .25s var(--ease);
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 12px;
+  border: 0; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; transition: background .2s, box-shadow .25s var(--ease);
 }
 .item:hover { background: color-mix(in srgb, var(--sheet) 55%, transparent); }
 .item.sel { background: var(--sheet); box-shadow: var(--shadow); }
-.item .case { font: 500 13.5px var(--mono); }
-.item .pages { grid-column: 1; font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); }
-.item .tag { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+.item > span:first-child { min-width: 0; }
+.item .case { display: block; font: 500 13.5px var(--mono); }
+.item .pages { display: block; font: 11.5px var(--mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
 .item.flash { animation: flash .9s var(--ease); }
 @keyframes flash { 0% { background: var(--pen-soft); } 100% { background: transparent; } }
-.item.sel.flash { animation: none; }
-.tag.check { background: var(--hl); padding: 2px 7px; border-radius: 3px; transform: rotate(-1.5deg); }
-.tag.clear { color: var(--ok); }
+.tag { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tag.check { background: var(--hl); padding: 2px 8px; border-radius: 3px; transform: rotate(-1.5deg); }
+.tag.ok { color: var(--ok); }
+.tag.fix { color: var(--pen); }
 .tag.err { color: var(--err); }
+.tag.todo { color: var(--ink-2); font-weight: 600; }
 .tag.diff { color: var(--amber); }
-.tag.wait { color: var(--ink-3); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
-.tag.wait::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rule); border-top-color: var(--pen); animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.tag.wait { color: var(--ink-2); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.tag.wait.spin::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rule); border-top-color: var(--pen); animation: spin .8s linear infinite; }
+.qempty { flex: 1; display: grid; place-items: center; text-align: center; padding: 28px 18px; }
+.qempty h3 { margin: 0 0 6px; font: 700 20px var(--display); font-stretch: 108%; }
+.qempty p { margin: 0 0 16px; color: var(--ink-2); font-size: 14px; }
+.qfoot { padding: 14px 18px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 8px; }
+.qfoot .row { display: flex; gap: 8px; }
+.qfoot .row .btn { flex: 1; }
 
-/* ---------- the form mirror ---------- */
-.mirror { overflow-y: auto; padding: 24px 28px 60px; min-height: 0; }
-.sheet { background: var(--sheet); border-radius: 14px; box-shadow: var(--shadow); padding: 26px 30px 30px; max-width: 780px; margin: 0 auto; }
-.metrics { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 10px 14px; margin: -8px -10px 20px; background: var(--bed); border-radius: 9px; }
-.metrics div { display: flex; align-items: baseline; gap: 6px; }
-.metrics b { font: 600 13.5px var(--mono); font-variant-numeric: tabular-nums; }
-.metrics span { font-size: 11.5px; color: var(--ink-3); }
-.metrics .cost { margin-left: auto; }
-.ids { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 18px; padding-bottom: 20px; border-bottom: 1px solid var(--rule); }
-.ids .f .v { font-size: 17px; }
-.sec { margin-top: 24px; }
-.sec > h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
-.sec > h3::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
-.f { position: relative; min-width: 0; }
-.reveal .f { animation: rise .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 28ms); }
-@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-.f .l { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
-.f .v { position: relative; display: inline-flex; align-items: center; gap: 6px; font: 500 15px var(--mono); padding: 1px 4px; margin-left: -4px; isolation: isolate; }
+.mirror { overflow-y: auto; min-height: 0; padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dochead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dochead .case { font: 600 24px var(--mono); margin-top: 4px; overflow-wrap: anywhere; }
+.dochead .left { font-size: 14px; color: var(--ink-2); }
+.dochead .left b { color: var(--amber); }
+.dochead .tag { font-size: 14px; }
+.sheet { padding: 22px 26px; display: flex; flex-direction: column; gap: 20px; }
+.ids { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--rule); }
+.f { min-width: 0; }
+.f .l { font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.f .v { font: 500 15px var(--mono); overflow-wrap: anywhere; margin-top: 2px; }
 .f .v.pen { color: var(--pen); }
-.f .v.none { color: var(--dot); font-family: var(--body); font-size: 13.5px; }
-/* the highlighter stroke on anything the reader should check */
-.f.hl .v::before {
-  content: ""; position: absolute; z-index: -1; left: -4px; right: -6px; top: 16%; bottom: 2%;
-  background: var(--hl); border-radius: 3px 8px 4px 9px; transform: rotate(-1.2deg) skewX(-8deg); transform-origin: left;
-}
-.reveal .f.hl .v::before { animation: swipe .55s var(--ease) both; animation-delay: calc(var(--i, 0) * 28ms + .25s); }
-@keyframes swipe { from { transform: rotate(-1.2deg) skewX(-8deg) scaleX(0); } }
-.f.hl .v, .f.hl .v.pen { color: var(--ink); }
-
-/* confidence: signal bars, a number only where it matters */
-.sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
-.sig i { width: 3px; border-radius: 1px; background: var(--rule); transition: background .3s; }
-.sig i:nth-child(1) { height: 4px; } .sig i:nth-child(2) { height: 6px; } .sig i:nth-child(3) { height: 8.5px; } .sig i:nth-child(4) { height: 11px; }
-.sig.l1 i:nth-child(-n+1), .sig.l2 i:nth-child(-n+2), .sig.l3 i:nth-child(-n+3), .sig.l4 i { background: var(--ok); }
-.sig.warn i:nth-child(-n+3) { background: var(--amber); }
-.sig.warn.l1 i:nth-child(n+2), .sig.warn.l2 i:nth-child(n+3) { background: var(--rule); }
-.pct { font: 600 10.5px var(--mono); color: var(--amber); background: color-mix(in srgb, var(--hl) 45%, transparent); padding: 0 5px; border-radius: 3px; }
-.sigwrap { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
-.sigwrap .full { font: 500 10.5px var(--mono); color: var(--ink-3); opacity: 0; transform: translateX(4px); transition: opacity .2s, transform .2s var(--ease); }
-.f:hover .sigwrap .full { opacity: 1; transform: none; }
-
-.yesno { display: flex; gap: 18px; align-items: center; }
-.aside { font: 400 12.5px var(--body); color: var(--ink-3); }
-.box { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--body); color: var(--ink-2); }
-.box::before { content: ""; width: 15px; height: 15px; border: 1.5px solid var(--ink); border-radius: 2px; flex: none; }
-.box.on { color: var(--ink); font-weight: 650; }
-.box.on::before {
-  background:
-    linear-gradient(45deg, transparent 44%, var(--pen) 44% 56%, transparent 56%),
-    linear-gradient(-45deg, transparent 44%, var(--pen) 44% 56%, transparent 56%);
-}
-.boxes { display: flex; flex-wrap: wrap; gap: 6px 11px; }
-.boxes .box { font-size: 12.5px; }
-
-.row { display: grid; grid-template-columns: 22px 1fr; gap: 14px 18px; padding: 16px 0; border-top: 1px dashed var(--rule); }
-.row:first-of-type { border-top: 0; padding-top: 4px; }
-.row .n { grid-row: span 2; font: 700 12px var(--display); font-stretch: 120%; color: var(--dot); padding-top: 22px; }
-.row .pair { display: grid; grid-template-columns: auto 1fr; gap: 14px 30px; align-items: start; }
-.row.empty { grid-template-columns: 22px 1fr auto; align-items: center; padding: 10px 0; }
-.row.empty .n { grid-row: auto; padding: 0; }
-.row.empty .what { color: var(--ink-3); font-size: 13px; }
-
-/* amount in the form's own dotted digit boxes */
-.comb { display: inline-flex; align-items: flex-end; gap: 3px; }
-.comb i { width: 22px; height: 30px; display: grid; place-items: center; border: 1.5px dotted var(--dot); border-radius: 2px; font: 400 17px/1 var(--mono); font-style: normal; color: var(--pen); }
-.comb b { font: 700 18px/1 var(--mono); color: var(--ink); margin: 0 1px; }
-.f.hl .comb i { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 35%, transparent); }
-.hand { display: grid; grid-template-columns: auto 1fr 1fr; gap: 18px 28px; align-items: start; }
-.line { display: inline-block; min-width: 140px; border-bottom: 1.5px solid var(--ink); padding: 0 4px 2px; }
-.alt { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; font: 500 12.5px var(--mono); color: var(--amber); }
-.alt::before { content: "Claude"; font: 650 10.5px var(--body); letter-spacing: .04em; text-transform: uppercase; }
+.f .v.none { font: 400 13.5px var(--body); color: var(--ink-2); }
+.f .v.fixed { color: var(--pen); font-weight: 600; }
+.f .was { display: block; font: 12px var(--mono); color: var(--ink-2); text-decoration: line-through; }
+.f .alt { display: flex; gap: 6px; margin-top: 4px; font: 500 12.5px var(--mono); color: var(--amber); }
+.f .alt::before { content: "Claude"; font: 650 10.5px var(--body); letter-spacing: .04em; text-transform: uppercase; }
 .f.diff .l { color: var(--amber); }
-.metrics.other { margin-top: -14px; }
-.metrics.other .err { color: var(--err); font: 600 12.5px var(--body); }
-/* comparison: both readings side by side */
-.cmpbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 14px; }
+.f .redo { margin-top: 2px; min-height: 32px; padding: 0 8px; margin-left: -8px; font-size: 12.5px; }
+.reveal .f, .reveal .flag { animation: rise .5s var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.sec { display: flex; flex-direction: column; gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.p1line { display: flex; gap: 10px 24px; align-items: baseline; font-size: 14px; flex-wrap: wrap; }
+.p1line .fixed { color: var(--pen); }
+.rowlbl { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 4px; }
+.flag { border: 2px solid var(--hl); border-radius: 12px; padding: 14px 16px; background: var(--hl-soft); display: flex; flex-direction: column; gap: 10px; }
+.flag .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.flag .head label, .flag .head .name { font-size: 13px; font-weight: 700; }
+.pct { font: 600 12px var(--mono); color: var(--amber); white-space: nowrap; }
+.flag .why { margin: 0; font-size: 13.5px; color: #3D4650; }
+.fixrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.fixrow input[type=text] { width: 220px; max-width: 100%; min-height: 44px; padding: 0 12px; border: 1.5px solid var(--ink); border-radius: 8px; font: 500 18px var(--mono); background: #fff; }
+.fixrow input[type=text]:focus { outline: none; box-shadow: 0 0 0 3px var(--pen-soft); border-color: var(--pen); }
+.fixrow input.bad, .fixrow input.bad:focus { border-color: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 15%, transparent); }
+.yn { display: flex; gap: 6px; }
+.yn label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1.5px solid #C3CBD4; border-radius: 8px; background: #fff; font: 600 15px var(--body); cursor: pointer; }
+.yn label:has(input:checked) { border-color: var(--ink); }
+.yn input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
+.actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.notes { padding: 12px 14px; border-left: 3px solid var(--hl); background: color-mix(in srgb, var(--hl) 14%, transparent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+.notes p { margin: 4px 0 0; }
+.notes .warn { color: var(--err); font-weight: 600; }
+.files .v { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.errorbox { padding: 18px 20px; border-radius: 10px; background: var(--err-soft); color: var(--err); display: flex; flex-direction: column; gap: 6px; }
+.errorbox b { font-size: 15px; }
+.errorbox span { color: #6E1E18; font-size: 14px; overflow-wrap: anywhere; }
+
+/* reading: steps + skeleton */
+.reading { display: grid; gap: 22px; }
+.readhead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.readhead strong { font: 700 20px var(--display); font-stretch: 108%; }
+.readhead .t, .readhead .t2 { font: 500 14px var(--mono); color: var(--pen); font-variant-numeric: tabular-nums; }
+.readhead .t2 { color: var(--ink-2); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li { display: flex; align-items: center; gap: 12px; color: var(--ink-2); transition: color .3s; }
+.steps li::before { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--rule); flex: none; transition: border-color .3s, background .3s; }
+.steps li.done::before { border-color: var(--ok); background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") center/12px no-repeat; }
+.steps li.now { color: var(--ink); font-weight: 600; }
+.steps li.now::before { border-color: var(--pen); border-top-color: transparent; animation: spin .8s linear infinite; }
+.steps li.skip { display: none; }
+.fp { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; font: 500 12px var(--mono); color: var(--pen); }
+.fp i { display: block; width: 90px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
+.fp i b { display: block; height: 100%; background: var(--pen); }
+.qnote { margin: 0; padding: 12px 14px; background: var(--bed); border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
+.qnote b { color: var(--ink); }
+.pbar { height: 8px; border-radius: 5px; background: var(--bed); overflow: hidden; position: relative; }
+.pbar b { display: block; height: 100%; width: 0; background: var(--pen); border-radius: 5px; transition: width .3s var(--ease); }
+.pbar::after { content: ""; position: absolute; inset: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: sweep 1.3s linear infinite; }
+.phase p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.skel { display: grid; gap: 12px; }
+.skel span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--bed) 0 40%, #fff 50%, var(--bed) 60% 100%); background-size: 300% 100%; animation: shimmer 1.6s linear infinite; }
+.skel span:nth-child(2) { width: 82%; } .skel span:nth-child(3) { width: 64%; } .skel span:nth-child(4) { width: 90%; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* all reviewed: summary + export */
+.done-all { max-width: 860px; width: 100%; margin: 0 auto; padding: 12px 0; display: flex; flex-direction: column; gap: 20px; }
+.done-all h2 { margin: 6px 0 0; font: 760 30px/1.1 var(--display); font-stretch: 108%; }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border-radius: 10px; overflow: hidden; }
+.summary div { background: var(--sheet); padding: 16px 18px; }
+.summary b { display: block; font: 760 28px/1 var(--display); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+.summary span { font-size: 12.5px; color: var(--ink-2); }
+.choice { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border: 1.5px solid var(--rule); border-radius: 10px; background: #fff; cursor: pointer; }
+.choice:has(input:checked) { border-color: var(--ink); }
+.choice input { margin-top: 4px; accent-color: var(--ink); width: 16px; height: 16px; }
+.choice b { display: block; }
+.choice span { font-size: 13px; color: var(--ink-2); }
+
+/* comparison (only when the server has more than one reader) */
+.cmpbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .cmpbar .sum { font-size: 14px; color: var(--ink-2); }
-.cmpbar .sum b { color: var(--amber); font-variant-numeric: tabular-nums; }
+.cmpbar .sum b { color: var(--amber); }
 .cmpbar .sum b.ok { color: var(--ok); }
 .cmpbar .tools { display: flex; align-items: center; gap: 14px; }
-.only { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; user-select: none; }
+.cmpbar .seg button { padding: 0 12px; }
+.only { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; }
 .only input { accent-color: var(--amber); width: 15px; height: 15px; margin: 0; }
+.cmperr { color: var(--err); font-weight: 600; font-size: 13px; }
 table.cmp { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .cmp thead th { position: sticky; top: -24px; z-index: 1; background: var(--sheet); text-align: left; padding: 10px 12px; border-bottom: 1.5px solid var(--ink); }
 .cmp thead th b { display: block; font: 700 14px var(--display); font-stretch: 108%; }
-.cmp thead th small { display: block; font: 400 11.5px var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp thead th small { display: block; font: 400 11.5px var(--mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmp col.k { width: 27%; } .cmp col.mk { width: 34px; }
 .cmp .grp td { padding: 18px 12px 6px; }
 .cmp tbody tr:not(.grp) > * { padding: 9px 12px; border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent); vertical-align: middle; }
 .cmp tbody th { text-align: left; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .cmp td .cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .cv { font: 500 15px var(--mono); overflow-wrap: anywhere; }
-.cv.none { font: 400 13px var(--body); color: var(--dot); }
+.cv.none { font: 400 13px var(--body); color: var(--ink-2); }
 .cmp tr.diff > * { background: color-mix(in srgb, var(--hl) 24%, var(--sheet)); }
 .cmp tr.diff th { color: var(--ink); box-shadow: inset 3px 0 0 var(--amber); }
-.cmp tr.diff .cv:not(.none) { font-weight: 650; }
 .cmp .mk { text-align: center; font: 700 15px var(--mono); color: var(--amber); }
 .cmp tr:not(.diff) .mk { color: var(--ok); font-weight: 500; opacity: .6; }
 .cmp .alldone td { padding: 28px 12px; text-align: center; color: var(--ok); font-weight: 600; }
-.cmpnotes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
-.cmpnotes .notes { margin-top: 0; }
-.cmpnotes .label { display: block; margin-bottom: 6px; }
-@media (max-width: 760px) { .cmpnotes { grid-template-columns: 1fr; } .cmp col.k { width: 34%; } }
-.notes { margin-top: 24px; padding: 14px 16px; border-left: 3px solid var(--hl); background: color-mix(in srgb, var(--hl) 16%, transparent); border-radius: 0 8px 8px 0; font-size: 13.5px; }
-.notes p { margin: 0 0 6px; } .notes p:last-child { margin: 0; }
-.notes .warn { color: var(--err); font-weight: 600; }
-.errorbox { padding: 18px 20px; border-radius: 10px; background: color-mix(in srgb, var(--err) 9%, var(--sheet)); color: var(--err); font-weight: 600; }
-.meta { margin-top: 16px; display: flex; justify-content: space-between; gap: 12px; font: 11.5px var(--mono); color: var(--ink-3); }
-
-/* reading: steps + skeleton */
-.reading { display: grid; gap: 22px; }
-.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.steps li { display: flex; align-items: center; gap: 12px; color: var(--ink-3); transition: color .3s; }
-.steps li::before {
-  content: ""; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--rule); flex: none;
-  transition: border-color .3s, background .3s;
-}
-.steps li.now { color: var(--ink); font-weight: 600; }
-.steps li.now::before { border-color: var(--pen); border-top-color: transparent; animation: spin .8s linear infinite; }
-.steps li.done { color: var(--ink-2); }
-.steps li.skip { display: none; }
-.fp { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; font: 500 12px var(--mono); color: var(--pen); font-variant-numeric: tabular-nums; }
-.fp i { display: block; width: 90px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; }
-.fp i b { display: block; height: 100%; width: 0; background: var(--pen); transition: width .35s var(--ease); }
-.qnote { margin: 0; padding: 12px 14px; background: var(--bed); border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
-.qnote b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.big { height: 8px; border-radius: 5px; background: var(--bed); overflow: hidden; position: relative; }
-.big b { display: block; height: 100%; width: 0; background: var(--pen); border-radius: 5px; transition: width .3s var(--ease); }
-.big::after { content: ""; position: absolute; inset: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: sweep 1.3s linear infinite; }
-.phase p { margin: 0; color: var(--ink-2); font-size: 14px; }
-.readhead .t2 { font: 500 14px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.tag.wait.q::before { animation: none; width: 7px; height: 7px; border: 0; background: var(--dot); }
-.eta { color: var(--pen); }
-.steps li.done::before { border-color: var(--ok); background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") center/12px no-repeat; }
-.readhead { display: flex; align-items: baseline; justify-content: space-between; }
-.readhead strong { font: 700 20px var(--display); font-stretch: 108%; }
-.readhead .t { font: 500 14px var(--mono); color: var(--pen); font-variant-numeric: tabular-nums; }
-.skel { display: grid; gap: 12px; }
-.skel span { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--bed) 0 40%, var(--sheet) 50%, var(--bed) 60% 100%); background-size: 300% 100%; animation: shimmer 1.6s linear infinite; }
-.skel span:nth-child(2) { width: 82%; } .skel span:nth-child(3) { width: 64%; } .skel span:nth-child(4) { width: 90%; } .skel span:nth-child(5) { width: 48%; }
-@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.cmpnotes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
 /* ---------- the scan ---------- */
-.scan { border-left: 1px solid var(--rule); display: flex; flex-direction: column; min-height: 0; }
-.tabs { display: flex; gap: 4px; padding: 12px 14px; border-bottom: 1px solid var(--rule); align-items: center; }
-.tab { border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); transition: background .2s, color .2s; }
-.tab.on { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow); }
-.tabs .hint { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
-/* All pages of the document, one under the other, in one scroll. */
-.view { flex: 1; overflow: auto; padding: 14px; min-height: 0; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
-.page { position: relative; flex: none; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow); background: #fff; scroll-margin-top: 14px; }
+.scan { border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 12px; padding: 14px; min-width: 0; min-height: 0; }
+.tabs { display: flex; gap: 4px; align-items: center; min-width: 0; }
+.tabs button { min-height: 40px; border: 0; background: transparent; padding: 0 12px; border-radius: 6px; cursor: pointer; font: 600 13px var(--body); color: var(--ink-2); transition: background .2s, color .2s; }
+.tabs button[aria-pressed="true"] { background: var(--sheet); color: var(--ink); box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
+.tabs .file { margin-left: auto; font: 12px var(--mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.view { flex: 1; overflow: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.page { position: relative; flex: none; border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); background: #fff; scroll-margin-top: 0; }
 .page img { display: block; width: 100%; height: auto; cursor: zoom-in; animation: fadein .35s var(--ease); }
-.page .no { position: absolute; top: 8px; right: 8px; font: 600 11px/1 var(--body); color: var(--ink-2); background: color-mix(in srgb, var(--sheet) 88%, transparent); padding: 5px 7px; border-radius: 5px; box-shadow: var(--shadow); }
+.page .no { position: absolute; top: 10px; right: 12px; font: 600 11px/1 var(--body); color: var(--ink-2); background: #fff; padding: 5px 7px; border-radius: 5px; box-shadow: 0 2px 8px -4px rgba(18,22,27,.3); }
 .page .ph { aspect-ratio: 210 / 297; }
 @keyframes fadein { from { opacity: 0; } }
 .view.zoom { align-items: flex-start; }
@@ -360,36 +312,44 @@ table.cmp { width: 100%; border-collapse: collapse; table-layout: fixed; }
   animation: pass 2.2s var(--ease) infinite;
 }
 @keyframes pass { from { transform: translateY(-100%); } to { transform: translateY(460%); } }
+.ph { display: grid; place-items: center; color: var(--ink-2); font-size: 13px; text-align: center; padding: 20px; }
 .view > .ph { flex: 1; }
-.ph { height: 100%; display: grid; place-items: center; color: var(--ink-3); font-size: 13px; text-align: center; padding: 20px; }
-kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); }
+
+/* ---------- help ---------- */
+dialog.help { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 0; border-radius: 14px; padding: 0; box-shadow: 0 30px 60px -20px rgba(18,22,27,.5); color: var(--ink); }
+dialog.help::backdrop { background: rgba(18,22,27,.4); }
+.help .in { padding: 24px 28px 22px; display: flex; flex-direction: column; gap: 14px; }
+.help h2 { margin: 0; font: 760 24px/1.1 var(--display); font-stretch: 108%; }
+.help h3 { margin: 6px 0 0; font: 700 15px var(--display); font-stretch: 108%; }
+.help p, .help li { margin: 0; font-size: 14px; color: #3D4650; }
+.help ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.help .mark { background: var(--hl); padding: 0 4px; border-radius: 3px; color: var(--ink); }
+.help .foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--rule); }
 
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
 
-@media (max-width: 1180px) {
-  .work { grid-template-columns: 260px 1fr; height: auto; }
-  .scan { grid-column: 2; border-left: 0; border-top: 1px solid var(--rule); height: 70vh; }
-  .mirror { overflow: visible; }
-  .hero { grid-template-columns: 1fr; gap: 36px; }
-  .dev { grid-template-columns: 1fr; }
+@media (max-width: 1100px) {
+  .work { grid-template-columns: 260px minmax(0, 1fr); }
+  .scan { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); height: 80vh; }
+  .intake { grid-template-columns: 1fr; gap: 36px; }
+  .queue .list { max-height: 70vh; }
 }
 @media (max-width: 760px) {
   .top { padding: 12px 16px; gap: 10px; }
-  .key, .key .wrap, .key input { width: 100%; }
+  .banner { padding: 12px 16px; }
   .intake { padding: 32px 16px 48px; }
-  .pitch h1 { font-size: 34px; }
-  .dev { padding: 20px 16px; }
+  .intake h1 { font-size: 34px; }
   .work { grid-template-columns: 1fr; }
-  .queue { border-right: 0; border-bottom: 1px solid var(--rule); max-height: 50vh; }
-  .scan { grid-column: 1; }
+  .queue { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .queue .list { max-height: 50vh; }
+  .ids, .grid3, .summary, .cmpnotes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mirror { padding: 16px; }
   .sheet { padding: 18px 16px; }
-  .ids, .hand, .row .pair { grid-template-columns: 1fr; }
-  .metrics .cost { margin-left: 0; }
+  .cmp col.k { width: 34%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  html { scroll-behavior: auto; }
+  html, .view { scroll-behavior: auto; }
 }
 </style>
 </head>
@@ -407,35 +367,41 @@ kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width
     </svg>
     <span><b>LD dokumenti</b><small>Izjava o višini tuje pokojnine</small></span>
   </button>
-  <a class="navlink" href="/docs" target="_blank" rel="noopener">API dokumentacija <span>↗</span></a>
-  <div class="readers" id="readers">
-    <span class="label">Branje</span>
+  <div class="readers" id="readers" hidden>
+    <span class="lbl">Branje</span>
     <span class="seg" role="group" aria-label="Kdo bere">
-      <button data-r="local" title="Lokalni bralnik (GPU), brez stroška API">Lokalno</button>
-      <button data-r="claude" title="Claude prek claude-pool">Claude</button>
-      <button data-r="both" title="Oba hkrati: lokalni rezultat, razlike s Claude označene">Primerjava</button>
+      <button data-r="local">Lokalno</button>
+      <button data-r="claude">Claude</button>
+      <button data-r="both">Primerjava</button>
     </span>
   </div>
-  <div class="key" id="keybox">
-    <label class="label" for="key">API ključ</label>
-    <span class="wrap"><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="zpiz-…"></span>
-  </div>
+  <span class="status" id="status" role="status" hidden></span>
+  <button class="btn" id="helpbtn" aria-haspopup="dialog">Pomoč</button>
+  <button class="btn" id="again" hidden>Nove datoteke</button>
+  <button class="btn" id="logout" hidden>Odjava</button>
 </header>
+<div class="banner" id="banner" role="alert" hidden>
+  <p>Bralnik ni dosegljiv. <span id="bannernote"></span></p>
+  <button class="btn" id="retry">Poskusi znova</button>
+</div>
 
 <section class="intake" id="intake">
-  <div class="hero">
-    <div class="pitch">
-      <span class="label">ZPIZ · LD obrazci</span>
-      <h1>Iz skena v podatke, <em>polje za poljem.</em></h1>
-      <p>Naložite skene izjav. Prebrali bomo kljukice, rokopis in QR kodo ter vrnili JSON, povezan z zadevo. Kar ni povsem jasno, je označeno za preverbo.</p>
-      <ul class="facts">
-        <li><b>~15 s</b>na dokument, paketi tečejo vzporedno</li>
-        <li><b>0–100 %</b>zanesljivost za vsako polje posebej</li>
-        <li><b>QR</b>ID dokumenta in VK prebrana iz QR kode, ne ugibana</li>
-      </ul>
-    </div>
-    <label class="drop" id="drop">
-      <input id="files" type="file" multiple hidden accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg,.zip">
+  <div>
+    <span class="lbl">ZPIZ · LD obrazci</span>
+    <h1>Iz skena v podatke, <em>polje za poljem.</em></h1>
+    <p>Naložite skene izjav. Prebrali bomo kljukice, rokopis in QR kodo. Kar ni povsem jasno, je označeno, da ga preverite.</p>
+    <form class="keybox" id="keyform" novalidate>
+      <label class="lbl" for="key">Ključ za dostop</label>
+      <div class="row">
+        <input id="key" type="password" autocomplete="current-password" spellcheck="false" aria-describedby="keyerr">
+        <button class="btn dark big" id="login">Prijava</button>
+      </div>
+      <span class="inerr" id="keyerr" role="alert"></span>
+    </form>
+    <div class="signed" id="signed" hidden>Prijavljeni ste. Naložite skene.</div>
+  </div>
+  <label class="drop off" id="drop" aria-describedby="drophint">
+    <input id="files" type="file" multiple class="sr" disabled accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg,.zip">
       <svg class="form-art" viewBox="0 0 210 270" aria-hidden="true">
         <defs>
           <linearGradient id="bm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2341C4" stop-opacity="0"/><stop offset=".85" stop-color="#2341C4" stop-opacity=".18"/><stop offset="1" stop-color="#2341C4" stop-opacity=".9"/></linearGradient>
@@ -473,153 +439,286 @@ kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width
           <rect class="beam" x="0" y="0" width="210" height="34" fill="url(#bm)"/>
         </g>
       </svg>
-      <div class="cta"><strong>Povlecite skene sem</strong><span>ali kliknite in izberite datoteke</span></div>
-      <div class="formats">TIFF · PDF · PNG · JPG · ZIP</div>
-    </label>
-  </div>
-
-  <div class="dev">
-    <div>
-      <span class="label">Za razvijalce</span>
-      <h2>Isto prek API-ja</h2>
-      <p>En dokument pošljete na <code>/v1/extract</code>, več naenkrat na <code>/v1/batch</code>. Vsak odgovor vsebuje polja, zanesljivost, porabo žetonov in čas.</p>
-      <a class="btn" href="/docs" target="_blank" rel="noopener">Odpri API dokumentacijo ↗</a>
-    </div>
-<pre><span class="k">curl</span> -H <span class="s">"Authorization: Bearer $KLJUC"</span> \
-  -F files=@stran1.tif -F files=@stran2.tif \
-  <span class="s" id="origin">https://ld-docs.etiam.si</span>/v1/extract</pre>
-  </div>
+    <div class="cta"><strong>Povlecite skene sem</strong><span id="drophint">Najprej se prijavite s ključem.</span></div>
+    <div class="formats">TIFF · PDF · PNG · JPG · ZIP</div>
+  </label>
 </section>
 
 <section class="work" id="work">
-  <aside class="queue">
+  <aside class="queue" aria-label="Paket">
     <div class="qhead">
-      <div class="qcount"><b id="count">0</b><span id="countword">dokumentov</span><span class="timer" id="timer"></span></div>
-      <div class="bar" id="barwrap"><span id="bar"></span></div>
-      <div class="qstats" id="qstats"></div>
-      <div class="totals" id="totals" title="Cena je izračunana po ceniku Anthropic API. Prek claude-pool se plača naročnina, ne ta znesek."></div>
-      <div class="qactions">
-        <button class="btn primary" id="dl" disabled>Prenesi JSON</button>
-        <button class="btn" id="again">Nove datoteke</button>
+      <div class="qcount"><b id="count">0</b><span id="countword"></span></div>
+      <div class="bar" id="bar"><i></i></div>
+      <span class="hint" id="qhint" hidden></span>
+      <div class="seg" role="group" aria-label="Prikaži" id="filter" hidden>
+        <button data-f="all" aria-pressed="true"></button><button data-f="check" aria-pressed="false"></button><button data-f="done" aria-pressed="false"></button>
       </div>
     </div>
     <div class="list" id="list" role="listbox" aria-label="Dokumenti"></div>
+    <div class="qempty" id="qempty" hidden><div><h3 id="qemptyh"></h3><p id="qemptyp"></p><button class="btn" id="showall">Pokaži vse</button></div></div>
+    <div class="qfoot" id="qfoot">
+      <span class="lbl">Izvoz</span>
+      <span class="hint" id="exphint" hidden></span>
+      <div class="row"><button class="btn" data-export="json">JSON za ZPIZ</button><button class="btn" data-export="csv">CSV</button></div>
+      <span class="inerr" id="experr" role="alert" hidden></span>
+    </div>
   </aside>
-  <main class="mirror" id="mirror"></main>
-  <aside class="scan">
+  <main class="mirror" id="mirror" aria-live="polite"></main>
+  <aside class="scan" aria-label="Sken">
     <div class="tabs" id="tabs"></div>
     <div class="view" id="view"></div>
   </aside>
 </section>
 
+<dialog class="help" id="help" aria-labelledby="helpt">
+  <div class="in">
+    <h2 id="helpt">Pomoč</h2>
+    <h3>1 · Prijava in nalaganje</h3>
+    <p>Vpišite ključ za dostop (dobite ga pri skrbniku sistema) in kliknite Prijava. Nato povlecite skene na okvir ali ga kliknite in izberite datoteke: TIFF, PDF, PNG, JPG ali ZIP s temi datotekami. Strani se same razdelijo na dokumente po QR kodi na prvi strani.</p>
+    <h3>2 · Preverjanje</h3>
+    <ul>
+      <li><span class="mark">Rumeno</span> označeno polje bralnik ni prebral povsem zanesljivo. Primerjajte ga s skenom na desni.</li>
+      <li>Če je prav, kliknite <b>Pravilno</b>. Če ni, vpišite pravo vrednost in kliknite <b>Shrani popravek</b>. Zneske pišite kot 2.500,02.</li>
+      <li>Popravljena vrednost je modra, prebrana pa prečrtana pod njo.</li>
+      <li>Ko je dokument v redu, kliknite <b>Potrdi dokument in naprej</b>. Potrjen dokument lahko odprete znova.</li>
+    </ul>
+    <h3>3 · Tipkovnica</h3>
+    <ul>
+      <li><kbd>↑</kbd> <kbd>↓</kbd> prejšnji / naslednji dokument, <kbd>Enter</kbd> potrdi dokument (ko kazalec ni v polju za vnos).</li>
+      <li>V polju za vnos <kbd>Enter</kbd> shrani popravek. <kbd>1</kbd> <kbd>2</kbd> pokaže stran skena; klik na sken ga poveča.</li>
+    </ul>
+    <h3>4 · Izvoz</h3>
+    <p>JSON za ZPIZ ali CSV za Excel prenesete v levem stolpcu spodaj. Dokumenti, ki še niso pregledani, se izvozijo z oznako »za preverbo«. Delo se shrani sproti, zato ga lahko nadaljujete tudi po osvežitvi strani.</p>
+    <h3>5 · Ko gre kaj narobe</h3>
+    <p>Rdeča oznaka pomeni, da dokumenta ni bilo mogoče prebrati: preberite opis, sken popravite in ga naložite znova. Če piše »Bralnik ne deluje«, kliknite Poskusi znova; če ne pomaga, pokličite skrbnika sistema.</p>
+    <div class="foot">
+      <span class="hint">Za povezavo z drugimi sistemi: <a href="/docs" target="_blank" rel="noopener">API dokumentacija ↗</a></span>
+      <button class="btn dark" id="helpclose">Zapri</button>
+    </div>
+  </div>
+</dialog>
+
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const CURRENCIES = ["EUR", "BAM", "HRK", "RSD", "MKD", "CHF", "AUD"];
-const COUNTRIES = ["D", "A", "I", "CH", "AUS", "HR", "BIH", "SRB", "MN", "MA"];
-const CHECK_BELOW = 0.9;
-// The real stages the server reports for a document (GET /v1/batch/{id}), in order.
+const store = (s, k, v) => { try { v === null ? s.removeItem(k) : s.setItem(k, v); } catch {} };
+const load = (s, k) => { try { return s.getItem(k); } catch { return null; } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Slovenian has four number forms: 1, 2, 3–4, 5+ (by the last two digits).
+const plural = (n, one, two, few, many) => { const m = n % 100; return m === 1 ? one : m === 2 ? two : m === 3 || m === 4 ? few : many; };
+const KEY_WRONG = "Ključ ni pravilen. Nov ključ dobite pri skrbniku sistema.";
+const AMOUNT_ERR = "Znesek zapišite s številkami, npr. 2.500,02.";
+const NO_SERVER = "Povezave s strežnikom ni bilo mogoče vzpostaviti. Preverite omrežje in poskusite znova.";
+
+/* ---------- the fields (app/extract.py FIELDS) ---------- */
+const TYPES = {
+  case_number: "string", documentation_number: "string", beneficiary_number: "string", other_country: "boolean",
+  ...Object.fromEntries([1, 2, 3].flatMap(i => [[`amount${i}`, "number"], [`currency${i}`, "string"], [`country${i}`, "string"]])),
+  amount: "number", currency: "string", country: "string", signature_present: "boolean",
+};
+const LABEL = {
+  case_number: "Številka zadeve", documentation_number: "Št. dokumentacije", beneficiary_number: "Št. upravičenca",
+  other_country: "Prejema pokojnino iz druge države", amount: "Znesek", currency: "Valuta", country: "Država", signature_present: "Podpis",
+  document_id: "ID dokumenta · iz QR", vk: "VK · iz QR",
+  ...Object.fromEntries([1, 2, 3].flatMap(i => [[`amount${i}`, `Znesek · vrstica ${i}`], [`currency${i}`, `Valuta · vrstica ${i}`], [`country${i}`, `Država · vrstica ${i}`]])),
+};
+const P2 = new Set(["amount", "currency", "country", "signature_present"]);
+const pageOf = k => P2.has(k) ? 1 : 0;
+const HAND = new Set(["amount", "currency", "country", "amount1", "amount2", "amount3"]);  // written by hand: ballpoint blue
+const empty = v => v === null || v === undefined || v === "";
+const fmtAmount = v => { const [i, d] = Math.abs(v).toFixed(2).split("."); return (v < 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + d; };
+function plain(k, v) {
+  if (empty(v)) return "prazno";
+  if (k === "signature_present") return v ? "podpisano" : "ni podpisa";
+  if (typeof v === "boolean") return v ? "da" : "ne";
+  if (typeof v === "number") return fmtAmount(v);
+  return String(v);
+}
+// 2.500,02 / 2500,02 / 2500.02 -> 2500.02; "" -> null; anything else is an error and is not sent.
+function parseAmount(s) {
+  const t = s.replace(/[\s ]/g, "");
+  if (!t) return { value: null };
+  let n;
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(t)) n = t.replace(/\./g, "").replace(",", ".");
+  else if (/^\d+(,\d{1,2})?$/.test(t)) n = t.replace(",", ".");
+  else if (/^\d+\.\d{1,2}$/.test(t)) n = t;
+  else return { error: AMOUNT_ERR };
+  return { value: Math.round(parseFloat(n) * 100) / 100 };
+}
+// The server's warnings are English; the clerk reads them in Slovenian.
+function warning(w) {
+  let m;
+  if (/^no QR code/.test(w)) return "Na strani 1 ni QR kode: ID dokumenta in VK manjkata.";
+  if (/^page 2 is missing/.test(w)) return "Stran 2 manjka: znesek, valuta, država in podpis so prazni.";
+  if ((m = w.match(/^(\d+) pages, only the first two/))) return `Dokument ima ${m[1]} strani, prebrani sta prvi dve.`;
+  if ((m = w.match(/^(document_id|vk) in the QR code \((.*)\) differs from the margin text \((.*)\)$/))) return `${m[1] === "vk" ? "VK" : "ID dokumenta"} v QR kodi (${m[2]}) se razlikuje od besedila ob robu (${m[3]}).`;
+  return w;
+}
+
+/* ---------- readers: the switch only when the server has more than one ---------- */
 const CLAUDE_STAGES = [
-  ["queued", "Čaka na prosto mesto"],
-  ["preparing", "Pripravljam sliki strani"],
-  ["starting", "Zaganjam branje"],
-  ["page1", "Claude bere stran 1"],
-  ["page2", "Claude bere stran 2"],
-  ["thinking", "Claude primerja polja s skenom"],
-  ["writing", "Claude zapisuje polja"],
+  ["queued", "Čaka na vrsto"], ["preparing", "Priprava strani"], ["starting", "Začetek branja"],
+  ["page1", "Branje strani 1"], ["page2", "Branje strani 2"], ["thinking", "Preverjanje polj s skenom"], ["writing", "Zapisovanje polj"],
 ];
-// The local reader (READER_URL on the server) reads a document in one step of a few seconds.
-const LOCAL_STAGES = [
-  ["queued", "Čaka na prosto mesto"],
-  ["preparing", "Pripravljam sliki strani"],
-  ["reading", "Berem lokalno: oznake, števke, rokopis"],
-];
-// Who reads: "local", "claude" or "both" (both read, the local result is shown with Claude's differences).
-// The server says which it has (GET /health); the choice is remembered, and a run keeps the reader it started with.
-let READERS = ["claude"], choice = "claude", MODE = "claude";
-let STAGES = CLAUDE_STAGES;
+const LOCAL_STAGES = [["queued", "Čaka na vrsto"], ["preparing", "Priprava strani"], ["reading", "Branje kljukic, številk in rokopisa"]];
+const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "začenja", retrying: "znova", page1: "bere stran 1", page2: "bere stran 2", thinking: "preverja", writing: "zapisuje", reading: "bere" };
+const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing", "reading"]);
+let READERS = ["local"], choice = "local", MODE = "local", STAGES = LOCAL_STAGES, HEALTH = null;
 const setMode = m => { MODE = m; STAGES = m === "local" ? LOCAL_STAGES : CLAUDE_STAGES; };
 function showReaders() {
-  $("readers").classList.toggle("on", READERS.length > 1);
-  $("readers").querySelectorAll("button").forEach(b => {
-    b.hidden = !READERS.includes(b.dataset.r);
-    b.setAttribute("aria-pressed", b.dataset.r === choice);
-  });
+  $("readers").hidden = READERS.length < 2;
+  $("readers").querySelectorAll("button").forEach(b => { b.hidden = !READERS.includes(b.dataset.r); b.setAttribute("aria-pressed", b.dataset.r === choice); });
 }
 $("readers").addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b || running) return;
-  choice = b.dataset.r;
-  try { localStorage.setItem("ld-reader", choice); } catch {}
-  showReaders();
+  choice = b.dataset.r; store(localStorage, "ld-reader", choice); showReaders();
 });
-fetch("/health").then(r => r.json()).then(h => {
-  READERS = h.readers || [h.reader];
-  let saved = null;
-  try { saved = localStorage.getItem("ld-reader"); } catch {}
-  choice = READERS.includes(saved) ? saved : h.reader;
-  setMode(choice); showReaders();
-}).catch(() => {});
-const SHORT = { queued: "v vrsti", preparing: "priprava", starting: "zaganja", retrying: "ponovno", page1: "stran 1", page2: "stran 2", thinking: "primerja", writing: "zapisuje", reading: "bere" };
-const READING = new Set(["starting", "retrying", "page1", "page2", "thinking", "writing", "reading"]);
-const MB = b => nf(b / 1048576, 1);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const nf = (v, d = 0) => v.toLocaleString("sl-SI", { minimumFractionDigits: d, maximumFractionDigits: d });
-const secs = ms => ms >= 60000 ? `${Math.floor(ms / 60000)} min ${nf((ms % 60000) / 1000)} s` : `${nf(ms / 1000, 1)} s`;
-const usd = v => v < 0.01 ? `${nf(v, 4)} $` : `${nf(v, 3)} $`;
-const tokens = u => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_read_tokens || 0) + (u.cache_write_tokens || 0);
+const readerDown = () => !HEALTH || (HEALTH.local && !HEALTH.local.ok);
+async function checkHealth() {
+  try {
+    const r = await fetch("/health", { cache: "no-store" });
+    HEALTH = await r.json();
+    if (!HEALTH.ok) throw 0;
+  } catch { HEALTH = null; }
+  if (HEALTH) {
+    READERS = HEALTH.readers || [HEALTH.reader];
+    if (!checkHealth.seen) { const saved = load(localStorage, "ld-reader"); choice = READERS.includes(saved) ? saved : HEALTH.reader || READERS[0]; if (!running) setMode(choice); }
+    if (!READERS.includes(choice)) choice = READERS[0];
+    checkHealth.seen = true;
+    showReaders();
+  }
+  const down = readerDown();
+  const s = $("status");
+  s.hidden = false;
+  s.classList.toggle("down", down);
+  s.textContent = down ? "Bralnik ne deluje" : "Bralnik deluje";
+  $("banner").hidden = !down;
+  renderBanner();
+  if (docs.length) renderList();
+}
+function renderBanner() {
+  const waiting = docs.filter(d => d.status === "pending").length;
+  $("bannernote").textContent = !HEALTH ? "Strežnik se ne odziva."
+    : waiting ? `${waiting} ${plural(waiting, "dokument čaka", "dokumenta čakata", "dokumenti čakajo", "dokumentov čaka")} v vrsti in se prebere, ko bo spet deloval.`
+    : "Skene lahko naložite; prebrani bodo, ko bo bralnik spet deloval.";
+}
+$("retry").addEventListener("click", async () => { $("retry").disabled = true; await checkHealth(); $("retry").disabled = false; });
+setInterval(checkHealth, 30000);
 
-$("origin").textContent = location.origin.startsWith("http") ? location.origin : "https://ld-docs.etiam.si";
-
-let docs = [], sel = 0, running = false, session = 0, startedAt = 0, finishedAt = 0;
-let phase = "upload", up = { sent: 0, total: 0 }, splitting = { done: 0, total: 0 }, parallel = 6, follow = true;
-const sources = new Map();   // page name (as the API reports it) -> () => Promise<blob url | null>
-const rendered = new Map();
-const revealed = new Set();  // documents whose fields already animated in
-let lastMirror = "", lastScan = "";
-
-/* ---------- API key ---------- */
-const keyInput = $("key");
-try { keyInput.value = localStorage.getItem("ld-key") || ""; } catch {}
-const keyState = () => $("keybox").classList.toggle("on", !!keyInput.value.trim());
-keyInput.addEventListener("input", () => { keyState(); try { localStorage.setItem("ld-key", keyInput.value.trim()); } catch {} });
-keyState();
+/* ---------- key ---------- */
+let KEY = load(localStorage, "ld-key") || "", keyOk = false;
+function keyUi(msg = "") {
+  $("keyform").hidden = keyOk; $("signed").hidden = !keyOk; $("logout").hidden = !keyOk;
+  $("keyerr").textContent = msg;
+  $("key").setAttribute("aria-invalid", msg ? "true" : "false");
+  $("drop").classList.toggle("off", !keyOk);
+  $("drop").setAttribute("aria-disabled", !keyOk);
+  $("files").disabled = !keyOk;
+  $("drophint").textContent = keyOk ? "ali kliknite in izberite datoteke" : "Najprej se prijavite s ključem.";
+}
+// An authed request that can only answer 404 (no such job) proves the key without side effects.
+async function login(key) {
+  $("login").disabled = true;
+  let r = null;
+  try { r = await fetch("/v1/batch/0000", { headers: { Authorization: "Bearer " + key } }); } catch {}
+  $("login").disabled = false;
+  if (!r) return keyUi(NO_SERVER), false;
+  if (r.status === 401 || r.status === 403) return keyUi(KEY_WRONG), false;
+  if (r.status === 503) return keyUi("Na strežniku ni nastavljen noben ključ. Obrnite se na skrbnika sistema."), false;
+  if (r.status !== 404 && !r.ok) return keyUi(`Strežnik je vrnil napako ${r.status}. Poskusite znova čez minuto.`), false;
+  KEY = key; keyOk = true; store(localStorage, "ld-key", key); keyUi();
+  return true;
+}
+$("keyform").addEventListener("submit", async e => {
+  e.preventDefault();
+  const k = $("key").value.trim();
+  if (!k) { keyUi("Vpišite ključ za dostop."); $("key").focus(); return; }
+  if (await login(k)) restore();
+  else $("key").focus();
+});
+function signOut(wrong = false) {
+  KEY = ""; keyOk = false; store(localStorage, "ld-key", null); store(sessionStorage, "ld-job", null);
+  $("key").value = "";
+  goHome();
+  keyUi(wrong ? KEY_WRONG : "");
+}
+$("logout").addEventListener("click", () => signOut());
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + keyInput.value.trim() } });
+  let r;
+  try { r = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + KEY, ...(opts.headers || {}) } }); }
+  catch { throw new Error(NO_SERVER); }
+  if (r.status === 401) { signOut(true); throw Object.assign(new Error(KEY_WRONG), { status: 401 }); }
   const body = await r.json().catch(() => ({}));
-  if (r.status === 401) throw new Error("API ključ ni pravilen. Vpišite ga zgoraj desno.");
-  if (!r.ok) throw new Error(body.detail || `Strežnik je vrnil napako ${r.status}. Poskusite znova čez minuto.`);
+  if (!r.ok) throw Object.assign(new Error(typeof body.detail === "string" ? body.detail : `Strežnik je vrnil napako ${r.status}. Poskusite znova čez minuto.`), { status: r.status });
   return body;
 }
 
+/* ---------- state ---------- */
+let docs = [], rejected = [], jobId = null, jobLabel = "", jobStatus = "", sel = 0, filter = "all";
+let running = false, session = 0, phase = "read", up = { sent: 0, total: 0 }, splitting = { done: 0, total: 0 }, parallel = 6, follow = true;
+const sources = new Map();   // page name (as the API reports it) -> () => Promise<blob url | null>
+const rendered = new Map();
+let sourcesReady = false;
+const revealed = new Set();
+const drafts = new Map();    // "i|field" -> what the clerk typed, kept across re-renders
+const editing = new Set();   // "i|field": an already reviewed field opened again
+const errs = new Map();      // "i|field" -> inline error
+const busy = new Set();      // document indices with a PATCH in flight
+const patchedAt = {};        // index -> when its PATCH answered; older polls don't overwrite it
+let docErr = "", lastMirror = "", lastScan = "", exporting = false;
+
+const server = () => docs.filter(d => !d.local);
+const confirmed = d => d.status === "done" && (d.review || {}).status === "confirmed";
+const unc = d => d.status === "done" ? (d.uncertain_fields || []).filter(k => k in TYPES) : [];
+const reviewed = (d, k) => ((d.review || {}).fields || {})[k];
+const flagOpen = (d, i, k) => d.status === "done" && !confirmed(d) && ((unc(d).includes(k) && !reviewed(d, k)) || editing.has(i + "|" + k));
+const openCount = (d, i) => Object.keys(TYPES).filter(k => flagOpen(d, i, k)).length;
+const corrected = d => Object.values((d.review || {}).fields || {}).filter(f => f.action === "corrected").length;
+const toCheck = d => d.status === "done" && !confirmed(d) && unc(d).length > 0;
+const allReviewed = () => { const s = server(); return !running && s.length > 0 && s.every(d => confirmed(d) || d.status === "error") && s.some(confirmed); };
+const visible = () => docs.map((d, i) => i).filter(i => filter === "all" || (filter === "check" ? toCheck(docs[i]) : confirmed(docs[i])));
+const saveSel = () => store(sessionStorage, "ld-sel", String(sel));
+
 /* ---------- navigation ---------- */
 function transition(fn) {
-  if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(fn);
+  if (document.startViewTransition && !reduced()) document.startViewTransition(fn);
   else fn();
 }
 function goHome() {
   transition(() => {
     session++;  // a running batch keeps going on the server; this page just stops following it
-    running = false; docs = []; lastMirror = lastScan = "";
+    running = false; docs = []; rejected = []; jobId = null; lastMirror = lastScan = "";
+    store(sessionStorage, "ld-job", null);
     document.body.classList.remove("working");
+    $("again").hidden = true;
     $("intake").classList.remove("screen-enter"); void $("intake").offsetWidth; $("intake").classList.add("screen-enter");
     window.scrollTo(0, 0);
   });
 }
 $("home").addEventListener("click", goHome);
 $("again").addEventListener("click", goHome);
+function enterWork() {
+  transition(() => {
+    document.body.classList.add("working");
+    $("again").hidden = false;
+    $("work").classList.remove("screen-enter"); void $("work").offsetWidth; $("work").classList.add("screen-enter");
+    render();
+  });
+}
 
 /* ---------- intake ---------- */
 const drop = $("drop");
 let dragDepth = 0;
-drop.addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; drop.classList.add("over"); });
+drop.addEventListener("dragenter", e => { e.preventDefault(); if (!keyOk) return; dragDepth++; drop.classList.add("over"); });
 drop.addEventListener("dragover", e => e.preventDefault());
 drop.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; drop.classList.remove("over"); } });
-drop.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; drop.classList.remove("over"); start([...e.dataTransfer.files]); });
+drop.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; drop.classList.remove("over"); if (keyOk) start([...e.dataTransfer.files]); else $("key").focus(); });
+drop.addEventListener("click", e => { if (!keyOk) { e.preventDefault(); $("key").focus(); } });
 $("files").addEventListener("change", e => { start([...e.target.files]); e.target.value = ""; });
-
-const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 
 async function registerSources(files) {
   sources.clear(); rendered.forEach(u => u && URL.revokeObjectURL(u)); rendered.clear();
@@ -630,12 +729,9 @@ async function registerSources(files) {
         if (e.dir || e.name.startsWith("__MACOSX/")) continue;
         await registerFile(e.name, () => e.async("arraybuffer"));
       }
-    } else {
-      await registerFile(f.name, () => f.arrayBuffer());
-    }
+    } else await registerFile(f.name, () => f.arrayBuffer());
   }
 }
-
 async function registerFile(name, load) {
   if (/\.(tiff?)$/i.test(name)) {
     const buf = await load();
@@ -643,11 +739,8 @@ async function registerFile(name, load) {
     ifds.forEach((ifd, i) => sources.set(ifds.length > 1 ? `${name}#${i + 1}` : name, () => tiffToUrl(buf, ifd)));
   } else if (/\.(png|jpe?g)$/i.test(name)) {
     sources.set(name, async () => URL.createObjectURL(new Blob([await load()])));
-  } else {
-    sources.set(name, async () => null);  // PDF: no preview
-  }
+  } else sources.set(name, async () => null);  // PDF: no preview
 }
-
 async function tiffToUrl(buf, ifd) {
   UTIF.decodeImage(buf, ifd);
   const rgba = UTIF.toRGBA8(ifd);
@@ -661,472 +754,679 @@ function upload(path, form, onProgress) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open("POST", path);
-    x.setRequestHeader("Authorization", "Bearer " + keyInput.value.trim());
+    x.setRequestHeader("Authorization", "Bearer " + KEY);
     x.upload.onprogress = e => e.lengthComputable && onProgress(e.loaded, e.total);
     x.onload = () => {
       let body = {};
       try { body = JSON.parse(x.responseText); } catch {}
-      if (x.status === 401) reject(new Error("API ključ ni pravilen. Vpišite ga zgoraj desno."));
-      else if (x.status >= 400) reject(new Error(body.detail || `Strežnik je vrnil napako ${x.status}. Poskusite znova čez minuto.`));
+      if (x.status === 401) { signOut(true); reject(new Error(KEY_WRONG)); }
+      else if (x.status >= 400) reject(new Error(typeof body.detail === "string" ? body.detail : `Strežnik je vrnil napako ${x.status}. Poskusite znova čez minuto.`));
       else resolve(body);
     };
-    x.onerror = () => reject(new Error("Povezave s strežnikom ni bilo mogoče vzpostaviti. Preverite internet in poskusite znova."));
+    x.onerror = () => reject(new Error(NO_SERVER));
     x.send(form);
   });
 }
 
+const SCAN = /\.(tiff?|pdf|png|jpe?g|zip)$/i;
+function resetBatch() {
+  docs = []; rejected = []; sel = 0; filter = "all"; follow = true; jobId = null; jobStatus = ""; docErr = "";
+  drafts.clear(); editing.clear(); errs.clear(); busy.clear(); revealed.clear();
+  Object.keys(patchedAt).forEach(k => delete patchedAt[k]);
+  lastMirror = lastScan = ""; $("list").innerHTML = "";
+}
+
 async function start(files) {
-  if (!files.length || running) return;
-  if (!keyInput.value.trim()) { keyInput.focus(); keyInput.placeholder = "najprej vpišite API ključ"; return; }
+  if (!files.length || running || !keyOk) return;
   files.sort((a, b) => natural(a.name, b.name));
+  const ok = files.filter(f => SCAN.test(f.name));
   const mine = ++session;
-  running = true; startedAt = performance.now(); finishedAt = 0;
-  phase = "upload"; up = { sent: 0, total: files.reduce((n, f) => n + f.size, 0) }; splitting = { done: 0, total: 0 };
-  docs = []; sel = 0; follow = true;
-  revealed.clear(); lastMirror = lastScan = ""; $("list").innerHTML = "";
-  transition(() => {
-    document.body.classList.add("working");
-    $("work").classList.remove("screen-enter"); void $("work").offsetWidth; $("work").classList.add("screen-enter");
-    render();
-  });
-  tick();
-  registerSources(files).catch(() => {}).then(() => { lastScan = ""; renderScan(); });
+  resetBatch();
+  rejected = files.filter(f => !SCAN.test(f.name)).map(f => ({ status: "error", local: true, pages: [f.name], error: `${f.name} ni sken.` }));
+  jobLabel = ok.length === 1 ? ok[0].name : `${ok.length} ${plural(ok.length, "datoteka", "datoteki", "datoteke", "datotek")}`;
+  sourcesReady = false;
+  running = !!ok.length; phase = "upload"; up = { sent: 0, total: ok.reduce((n, f) => n + f.size, 0) }; splitting = { done: 0, total: 0 };
+  if (!ok.length) phase = "read", docs = [...rejected];
+  enterWork();
+  if (!ok.length) return;
+  registerSources(ok).catch(() => {}).then(() => { sourcesReady = true; lastScan = ""; renderScan(); });
   setMode(choice);
   const form = new FormData();
-  files.forEach(f => form.append("files", f));
-  form.append("reader", choice);
+  ok.forEach(f => form.append("files", f));
+  if (READERS.length > 1) form.append("reader", choice);
   try {
-    const { job_id } = await upload("/v1/batch", form, (sent, total) => {
-      if (mine === session) { up = { sent, total }; render(); }
-    });
+    const { job_id } = await upload("/v1/batch", form, (sent, total) => { if (mine === session) { up = { sent, total }; render(); } });
     if (mine !== session) return;
+    jobId = job_id;
+    store(sessionStorage, "ld-job", JSON.stringify({ id: job_id, label: jobLabel }));
     phase = "split"; render();
-    for (;;) {
-      const job = await api("/v1/batch/" + job_id);
-      if (mine !== session) return;
-      parallel = job.parallel || parallel;
-      if (job.reader && job.reader !== MODE) setMode(job.reader);
-      if (job.status === "error") throw new Error(job.error);
-      if (job.status === "splitting") splitting = job.split || splitting;
-      else { phase = "read"; docs = job.documents; if (follow) followActive(); }
-      render();
-      if (job.status !== "splitting" && job.status !== "running") break;
-      await sleep(job.status === "splitting" ? 300 : 700);
-    }
+    await poll(mine);
   } catch (e) {
     if (mine !== session) return;
     phase = "read";
-    docs = [{ status: "error", error: e.message, pages: files.map(f => f.name) }]; sel = 0;
+    docs = [{ status: "error", error: e.message, pages: ok.map(f => f.name), local: true }, ...rejected]; sel = 0;
   } finally {
-    if (mine === session) { running = false; finishedAt = performance.now(); render(); }
+    if (mine === session) { running = false; render(); }
   }
 }
 
-// Until the user picks a document, show the one being read right now.
+async function poll(mine) {
+  for (;;) {
+    const asked = performance.now();
+    const job = await api("/v1/batch/" + jobId);
+    if (mine !== session) return;
+    applyJob(job, asked);
+    render();
+    if (job.status !== "splitting" && job.status !== "running") break;
+    await sleep(job.status === "splitting" ? 300 : 700);
+  }
+}
+
+const INTERRUPTED = "Branje je bilo prekinjeno, ker se je strežnik znova zagnal. Skene tega dokumenta naložite znova.";
+function applyJob(job, asked) {
+  parallel = job.parallel || parallel;
+  jobStatus = job.status;
+  if (job.reader && job.reader !== MODE) setMode(job.reader);
+  if (job.status === "error") throw new Error(job.error);
+  if (job.status === "splitting") { phase = "split"; splitting = job.split || splitting; return; }
+  phase = "read";
+  const fresh = job.documents.map((d, i) =>
+    (patchedAt[i] || 0) > asked && docs[i] ? docs[i]
+    : job.status === "interrupted" && d.status === "pending" ? { ...d, status: "error", error: INTERRUPTED, interrupted: true } : d);
+  docs = fresh.concat(rejected);
+  if (follow && running) followActive();
+}
+
+// Until the clerk picks a document, show the one being read right now.
 function followActive() {
   const active = docs.findIndex(d => d.status === "pending" && d.stage && d.stage !== "queued");
   const next = active >= 0 ? active : docs.findIndex(d => d.status === "pending");
-  if (next >= 0 && next !== sel) { sel = next; }
+  if (next >= 0) sel = next;
 }
 
-let ticking = false;
-function tick() {
-  if (ticking) return;
-  ticking = true;
-  const frame = () => {
-    const ms = (finishedAt || performance.now()) - startedAt;
-    $("timer").textContent = secs(ms);
-    const t = document.querySelector(".readhead .t[data-since]");
-    if (t) t.textContent = t.dataset.since ? secs(Math.max(0, Date.now() - t.dataset.since * 1000)) : "";
-    if (running && document.body.classList.contains("working")) requestAnimationFrame(frame);
-    else ticking = false;
-  };
-  frame();
-}
-
-/* ---------- reading the result ---------- */
-const conf = (d, k) => (d.confidence || {})[k];
-const needsCheck = (d, k) => (d.uncertain_fields || []).includes(k) || (typeof conf(d, k) === "number" && conf(d, k) < CHECK_BELOW);
-const checkCount = d => d.status === "done" ? Object.keys(d.confidence || {}).filter(k => needsCheck(d, k)).length : 0;
-const docKey = d => (d.pages || []).join("|");
-// Every field in form order, for the side-by-side table.
-const GROUPS = [
-  ["Glava", [["case_number", "Zadeva"], ["documentation_number", "Št. dokumentacije"], ["beneficiary_number", "Št. upravičenca"], ["document_id", "ID dokumenta · QR"], ["vk", "VK · QR"]]],
-  ["Stran 1", [["other_country", "Pokojnina iz druge države"]]],
-  ...[1, 2, 3].map(i => [`Stran 1 · vrstica ${i}`, [[`amount${i}`, "Znesek"], [`currency${i}`, "Valuta"], [`country${i}`, "Država"]]]),
-  ["Stran 2", [["amount", "Znesek"], ["currency", "Valuta"], ["country", "Država"], ["signature_present", "Podpis"]]],
-];
-let cmpView = "side", onlyDiff = false;  // a comparison opens side by side; the form is one click away
-try { cmpView = localStorage.getItem("ld-cmp-view") || "side"; onlyDiff = localStorage.getItem("ld-cmp-only") === "1"; } catch {}
-const differs = (d, k) => ((d.compare || {}).differences || []).includes(k);
-const diffCount = d => d.status === "done" ? ((d.compare || {}).differences || []).length : 0;
-function plain(k, v) {
-  if (v === null || v === undefined || v === "") return "prazno";
-  if (k === "signature_present") return v ? "podpisano" : "ni podpisa";
-  if (typeof v === "boolean") return v ? "DA" : "NE";
-  if (typeof v === "number") return nf(v, 2);
-  return v;
-}
-
-function signal(d, k) {
-  const p = conf(d, k);
-  if (typeof p !== "number") return "";
-  const level = p >= 0.97 ? 4 : p >= 0.9 ? 3 : p >= 0.7 ? 2 : 1;
-  const warn = needsCheck(d, k);
-  const pct = Math.round(p * 100);
-  return `<span class="sigwrap" title="Zanesljivost ${pct} %">${warn ? `<span class="pct">${pct} %</span>` : `<span class="full">${pct} %</span>`}<span class="sig l${level} ${warn ? "warn" : ""}"><i></i><i></i><i></i><i></i></span></span>`;
-}
-
-let fieldIndex = 0;
-function field(d, k, label, inner) {
-  const diff = differs(d, k);
-  const alt = diff ? `<span class="alt">${esc(plain(k, d.compare.result[k]))}</span>` : "";
-  return `<div class="f ${needsCheck(d, k) ? "hl" : ""} ${diff ? "diff" : ""}" style="--i:${fieldIndex++}"><span class="l">${label}${signal(d, k)}</span>${inner}${alt}</div>`;
-}
-
-function text(v, pen = false) {
-  return v === null || v === undefined || v === ""
-    ? `<span class="v none">prazno</span>`
-    : `<span class="v ${pen ? "pen" : ""}">${esc(v)}</span>`;
-}
-
-function comb(v) {
-  let int = "", dec = "";
-  if (typeof v === "number") [int, dec] = v.toFixed(2).split(".");
-  const width = Math.max(6, Math.ceil(int.length / 3) * 3);
-  const digits = int.padStart(width, " ").split("");
-  let html = "";
-  digits.forEach((c, i) => {
-    if (i && (width - i) % 3 === 0) html += "<b>.</b>";
-    html += `<i>${c.trim()}</i>`;
-  });
-  html += "<b>,</b>" + (dec || "  ").split("").map(c => `<i>${c.trim()}</i>`).join("");
-  return `<span class="v"><span class="comb" aria-label="${typeof v === "number" ? v : "prazno"}">${html}</span></span>`;
-}
-
-function boxes(options, chosen) {
-  const list = chosen && !options.includes(chosen) ? [...options, chosen] : options;
-  return `<span class="v"><span class="boxes">${list.map(o => `<span class="box ${o === chosen ? "on" : ""}">${esc(o)}</span>`).join("")}</span></span>`;
-}
-
-function yesno(v) {
-  return `<span class="v"><span class="yesno"><span class="box ${v === true ? "on" : ""}">DA</span><span class="box ${v === false ? "on" : ""}">NE</span>${v === null ? '<span class="aside">ni označeno</span>' : ""}</span></span>`;
+// After a reload: the job id is in sessionStorage, the work is on the server.
+async function restore() {
+  let saved = null;
+  try { saved = JSON.parse(load(sessionStorage, "ld-job") || "null"); } catch {}
+  if (!saved || !saved.id || running) return;
+  const mine = ++session;
+  resetBatch();
+  jobId = saved.id; jobLabel = saved.label || ""; follow = false;
+  sources.clear(); sourcesReady = true;
+  try {
+    const asked = performance.now();
+    const job = await api("/v1/batch/" + jobId);
+    if (mine !== session) return;
+    applyJob(job, asked);
+    const s = +load(sessionStorage, "ld-sel");
+    sel = Number.isInteger(s) && s >= -1 && s < docs.length ? s : 0;
+    if (sel === -1 && !allReviewed()) sel = 0;
+    running = job.status === "splitting" || job.status === "running";
+    enterWork();
+    if (running) { try { await poll(mine); } finally { if (mine === session) { running = false; render(); } } }
+  } catch (e) {
+    if (mine !== session) return;
+    if (e.status === 404) store(sessionStorage, "ld-job", null);
+    jobId = null;
+  }
 }
 
 /* ---------- rendering (only what changed, so polling never flickers) ---------- */
 function render() {
-  const done = docs.filter(d => d.status === "done");
-  const errors = docs.filter(d => d.status === "error").length;
-  const toCheck = done.filter(d => checkCount(d)).length;
-  const finished = done.length + errors;
+  const s = server();
+  const M = docs.length;
+  const read = s.filter(d => d.status !== "pending").length;
+  const nConf = s.filter(confirmed).length;
   const before = phase === "upload" || phase === "split";
-  $("count").textContent = before ? "…" : docs.length;
-  $("countword").textContent = phase === "upload" ? "nalagam" : phase === "split" ? "delim strani"
-    : docs.length === 1 ? "dokument" : docs.length === 2 ? "dokumenta" : docs.length < 5 ? "dokumenti" : "dokumentov";
-  const pct = phase === "upload" ? (up.total ? up.sent / up.total : 0) * 15
-    : phase === "split" ? 15 + (splitting.total ? splitting.done / splitting.total : 0) * 10
-    : 25 + (docs.length ? finished / docs.length : 0) * 75;
-  $("bar").style.width = `${running ? pct : docs.length ? 100 : 0}%`;
-  $("barwrap").classList.toggle("live", running);
-  const sum = k => done.reduce((n, d) => n + ((d.usage || {})[k] || 0), 0);
-  let eta = "";
-  if (running && phase === "read" && done.length) {
-    const left = docs.length - finished;
-    eta = left ? `<span class="eta">še ~${secs(Math.ceil(left / parallel) * sum("duration_ms") / done.length)}</span>` : "";
+  $("count").textContent = before ? "…" : running ? read : nConf;
+  $("countword").textContent = phase === "upload" ? "nalaganje skenov" : phase === "split" ? "deljenje strani"
+    : running ? `od ${s.length} prebranih` : `od ${M} ${M === 1 ? "pregledan" : "pregledanih"}`;
+  const bar = $("bar");
+  const pct = phase === "upload" ? (up.total ? up.sent / up.total : 0) : phase === "split" ? (splitting.total ? splitting.done / splitting.total : 0)
+    : running ? (s.length ? read / s.length : 0) : (M ? nConf / M : 0);
+  bar.classList.toggle("pen", running || before);
+  bar.classList.toggle("live", running);
+  bar.firstElementChild.style.width = `${Math.round(pct * 100)}%`;
+  const hint = $("qhint");
+  hint.hidden = !(running || before);
+  if (phase === "upload") hint.textContent = `${mb(up.sent)} / ${mb(up.total)} MB`;
+  else if (phase === "split") hint.textContent = `${splitting.done} / ${splitting.total || "…"} strani`;
+  else if (running) {
+    const done = s.filter(d => d.status === "done" && d.usage);
+    const avg = done.length ? done.reduce((n, d) => n + (d.usage.duration_ms || 0), 0) / done.length : 0;
+    const left = s.length - read;
+    const eta = avg && left ? Math.ceil(left / parallel) * avg : 0;
+    hint.textContent = `Berejo se ${parallel} naenkrat` + (eta ? ` · še približno ${eta < 60000 ? "minuto" : Math.round(eta / 60000) + " min"}` : "");
   }
-  const compared = done.filter(d => d.compare && d.compare.result);
-  const diffs = compared.filter(d => diffCount(d)).length;
-  $("qstats").innerHTML = before ? `<span>${phase === "upload" ? `${MB(up.sent)} / ${MB(up.total)} MB` : `${splitting.done} / ${splitting.total || "…"} strani`}</span>`
-    : `<span><b>${done.length - toCheck}</b> jasnih</span><span><b>${toCheck}</b> za preverbo</span>${MODE === "both" ? `<span><b>${diffs}</b> z razlikami</span>` : ""}${errors ? `<span><b>${errors}</b> napak</span>` : ""}${eta}`;
-  const tok = done.reduce((n, d) => n + tokens(d.usage || {}), 0);
-  $("totals").innerHTML = `<div><b>${done.length ? secs(sum("duration_ms") / done.length) : "–"}</b><span>na dokument</span></div>`
-    + (MODE === "both" ? (() => {
-        const fields = compared.reduce((n, d) => n + Object.keys(d.confidence || {}).length, 0);
-        const same = fields - compared.reduce((n, d) => n + diffCount(d), 0);
-        const cost = compared.reduce((n, d) => n + ((d.compare.result.usage || {}).cost_usd || 0), 0);
-        return `<div><b>${fields ? nf(100 * same / fields, 1) + " %" : "–"}</b><span>enako kot Claude</span></div>`
-          + `<div><b>${compared.length ? usd(cost) : "–"}</b><span>Claude, cena API</span></div>`;
-      })()
-      : MODE === "local" ? `<div><b>${done.length}</b><span>prebranih</span></div><div><b>0 $</b><span>lokalno</span></div>`
-      : `<div><b>${done.length ? nf(tok) : "–"}</b><span>žetonov</span></div>`
-      + `<div><b>${done.length ? usd(sum("cost_usd")) : "–"}</b><span>po ceni API</span></div>`);
-  $("dl").disabled = !done.length || running;
+  // filter
+  $("filter").hidden = before;
+  const counts = { all: M, check: docs.filter(toCheck).length, done: nConf };
+  const words = { all: "Vsi", check: "Za preverbo", done: "Potrjeni" };
+  $("filter").querySelectorAll("button").forEach(b => { b.textContent = `${words[b.dataset.f]} ${counts[b.dataset.f]}`; b.setAttribute("aria-pressed", b.dataset.f === filter); });
+  // export
+  const notYet = s.filter(d => d.status !== "error" && !confirmed(d)).length;
+  $("qfoot").hidden = before;
+  $("exphint").hidden = !notYet || !jobId;
+  $("exphint").textContent = `${notYet} ${plural(notYet, "dokument še ni pregledan. Izvozi", "dokumenta še nista pregledana. Izvozita", "dokumenti še niso pregledani. Izvozijo", "dokumentov še ni pregledanih. Izvozijo")} se z oznako »za preverbo«.`;
+  document.querySelectorAll("[data-export]").forEach(b => b.disabled = !jobId || exporting);
+  renderBanner();
   renderList();
   renderMirror();
   renderScan();
 }
+const mb = b => (b / 1048576).toLocaleString("sl-SI", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-function itemHtml(d, i) {
-  const n = checkCount(d);
-  const tag = d.status === "pending"
-    ? `<span class="tag wait ${d.stage === "queued" ? "q" : ""}">${SHORT[d.stage] || "bere"}${d.stage === "writing" && d.of ? ` ${d.fields}/${d.of}` : ""}</span>`
-    : d.status === "error" ? `<span class="tag err">napaka</span>`
-    : MODE === "both" && diffCount(d) ? `<span class="tag diff">${diffCount(d)} ${diffCount(d) === 1 ? "razlika" : diffCount(d) === 2 ? "razliki" : diffCount(d) < 5 ? "razlike" : "razlik"}</span>`
-    : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag clear">jasno</span>`;
-  const title = d.case_number || (d.status === "pending" ? (d.stage === "queued" ? "V vrsti" : "Berem …") : d.status === "error" ? "Ni prebrano" : "Brez zadeve");
-  return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
-    <span class="case">${esc(title)}</span>${tag}<span class="pages">${esc((d.pages || []).join(" + "))}</span></button>`;
+const differs = (d, k) => ((d.compare || {}).differences || []).includes(k);
+const diffCount = d => d.status === "done" ? ((d.compare || {}).differences || []).length : 0;
+function errTag(d) {
+  if (d.local && /ni sken\.$/.test(d.error)) return "Ni sken";
+  if (d.interrupted) return "Prekinjeno";
+  if (/page 2|stran 2/i.test(d.error || "")) return "Ni strani 2";
+  return "Napaka";
 }
-
-// Replace only the rows that changed, so spinners and hover states don't restart on every poll.
+function itemHtml(d, i) {
+  const n = openCount(d, i);
+  const tag = d.status === "pending"
+    ? d.stage === "queued" || !d.stage ? `<span class="tag wait">${readerDown() ? "čaka bralnik" : "v vrsti"}</span>`
+      : `<span class="tag wait spin">${SHORT[d.stage] || "bere"}</span>`
+    : d.status === "error" ? `<span class="tag err">${errTag(d)}</span>`
+    : confirmed(d) ? (corrected(d) ? `<span class="tag fix">Popravljeno ${corrected(d)}</span>` : `<span class="tag ok">Potrjeno</span>`)
+    : MODE === "both" && diffCount(d) ? `<span class="tag diff">${diffCount(d)} ${plural(diffCount(d), "razlika", "razliki", "razlike", "razlik")}</span>`
+    : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag todo">za potrditev</span>`;
+  const pages = (d.pages || []).map(p => p.replace(/\.(tiff?|png|jpe?g|pdf)$/i, ""));
+  const pagesTxt = pages.length === 2 && /^\d+$/.test(pages[0]) && /^\d+$/.test(pages[1]) && pages[0].length === pages[1].length
+    ? `${pages[0]}–${pages[1].slice(-2)}` : (d.pages || []).join(", ");
+  return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
+    <span><span class="case">${esc(d.case_number || "—")}</span><span class="pages">${esc(pagesTxt)}</span></span>${tag}</button>`;
+}
 function renderList() {
   const list = $("list");
-  if (list.children.length !== docs.length) list.innerHTML = docs.map((d, i) => `<div data-sig="">${itemHtml(d, i)}</div>`).join("");
-  docs.forEach((d, i) => {
-    const row = list.children[i];
-    const html = itemHtml(d, i);
-    if (row.dataset.sig === html) return;
-    const wasPending = row.dataset.status === "pending";
-    row.innerHTML = html; row.dataset.sig = html; row.dataset.status = d.status;
-    if (wasPending && d.status !== "pending" && i !== sel) row.firstElementChild.classList.add("flash");
-  });
+  const before = phase === "upload" || phase === "split";
+  const vis = before ? [] : visible();
+  const shape = vis.join(",");
+  if (list.dataset.shape !== shape) {
+    list.dataset.shape = shape;
+    list.innerHTML = vis.map(i => `<div data-i="${i}" data-sig="">${itemHtml(docs[i], i)}</div>`).join("");
+    [...list.children].forEach(row => { row.dataset.sig = row.innerHTML; row.dataset.status = docs[+row.dataset.i].status; });
+  } else {
+    [...list.children].forEach(row => {
+      const i = +row.dataset.i, d = docs[i], html = itemHtml(d, i);
+      if (row.dataset.sig === html) return;
+      const wasPending = row.dataset.status === "pending";
+      row.innerHTML = html; row.dataset.sig = html; row.dataset.status = d.status;
+      if (wasPending && d.status !== "pending" && i !== sel) row.firstElementChild.classList.add("flash");
+    });
+  }
+  const none = !before && !vis.length && docs.length > 0;
+  $("qempty").hidden = !none;
+  list.hidden = none;
+  if (none) {
+    $("qemptyh").textContent = filter === "check" ? "Ni dokumentov za preverbo" : "Ni potrjenih dokumentov";
+    $("qemptyp").textContent = filter === "check"
+      ? (server().length === 1 ? (confirmed(docs[0]) ? "Edini dokument v paketu je potrjen." : "Edini dokument v paketu nima označenih polj.") : "Vsi dokumenti z označenimi polji so potrjeni.")
+      : "Potrjeni dokumenti se pokažejo tukaj.";
+  }
 }
-
-$("list").addEventListener("click", e => {
-  const b = e.target.closest(".item");
-  if (b) select(+b.dataset.i);
+$("list").addEventListener("click", e => { const b = e.target.closest(".item"); if (b) select(+b.dataset.i); });
+$("filter").addEventListener("click", e => {
+  const b = e.target.closest("button[data-f]");
+  if (!b) return;
+  filter = b.dataset.f; render();
 });
+$("showall").addEventListener("click", () => { filter = "all"; render(); });
 
-function select(i) {
-  if (i < 0 || i >= docs.length || i === sel) return;
-  follow = false;
-  transition(() => { sel = i; render(); });
-  requestAnimationFrame(() => $("list").querySelector(".sel")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+function select(i, focusItem = false) {
+  if (typeof i !== "number" || i < -1 || i >= docs.length || i === sel) return;
+  follow = false; docErr = "";
+  transition(() => { sel = i; saveSel(); render(); });
+  requestAnimationFrame(() => {
+    const el = $("list").querySelector(".sel");
+    el?.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
+    if (focusItem) el?.focus();
+  });
 }
 
 function panel(title, right, pct, note) {
   const m = $("mirror");
   if (m.dataset.view !== "panel:" + title) {
     m.dataset.view = "panel:" + title;
-    m.innerHTML = `<div class="sheet reading phase"><div class="readhead"><strong>${title}</strong><span class="t2"></span></div><div class="big"><b></b></div><p></p></div>`;
+    m.innerHTML = `<div class="card sheet reading phase"><div class="readhead"><strong>${title}</strong><span class="t2"></span></div><div class="pbar"><b></b></div><p></p></div>`;
   }
   m.querySelector(".t2").textContent = right;
-  m.querySelector(".big b").style.width = `${Math.round(pct * 100)}%`;
+  m.querySelector(".pbar b").style.width = `${Math.round(pct * 100)}%`;
   m.querySelector("p").textContent = note;
 }
 
+const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+function head(d, right) {
+  return `<div class="dochead"><div><span class="lbl">Dokument ${sel + 1} od ${docs.length}</span><div class="case">${esc(d.case_number || "—")}</div></div>${right}</div>`;
+}
 function reading(d) {
   const m = $("mirror");
-  const key = "reading:" + docKey(d);
+  const key = "reading:" + sel + (d.pages || []).join("|");
   if (m.dataset.view !== key) {
     m.dataset.view = key;
-    m.innerHTML = `<div class="sheet reading">
-      <div class="readhead"><strong>Berem dokument</strong><span class="t" data-since=""></span></div>
-      <ul class="steps">${STAGES.map(([k, label]) => `<li data-k="${k}">${label}</li>`).join("")}</ul>
-      <p class="qnote" hidden></p>
-      <div class="skel"><span></span><span></span><span></span><span></span><span></span></div>
-    </div>`;
+    m.innerHTML = `${head(d, `<span class="mono t" data-since=""></span>`)}
+      <div class="card sheet reading">
+        <ul class="steps">${STAGES.map(([k, label]) => `<li data-k="${k}">${label}</li>`).join("")}</ul>
+        <p class="qnote" hidden></p>
+        <div class="skel"><span></span><span></span><span></span><span></span></div>
+      </div>`;
+    m.querySelector(".t").style.color = "var(--pen)";
   }
   const stage = d.stage === "retrying" ? (MODE === "local" ? "reading" : "starting") : d.stage || "queued";
   const now = STAGES.findIndex(([k]) => k === stage);
   m.querySelectorAll(".steps li").forEach((li, i) => {
     const k = li.dataset.k;
     li.className = k === "page2" && (d.pages || []).length < 2 ? "skip" : i < now ? "done" : i === now ? "now" : "";
-    if (k === "writing") {
-      const w = stage === "writing" && d.of ? d.fields / d.of : 0;
-      li.innerHTML = `${STAGES[i][1]}${stage === "writing" ? ` <span class="fp"><i><b style="width:${Math.round(w * 100)}%"></b></i>${d.fields || 0} / ${d.of}</span>` : ""}`;
-    }
-    if (k === "starting" && d.stage === "retrying") li.textContent = "Ponovno zaganjam branje";
+    if (k === "writing") li.innerHTML = `${STAGES[i][1]}${stage === "writing" && d.of ? ` <span class="fp"><i><b style="width:${Math.round((d.fields || 0) / d.of * 100)}%"></b></i>${d.fields || 0} / ${d.of}</span>` : ""}`;
   });
-  const t = m.querySelector(".readhead .t");
-  t.dataset.since = d.started_at || "";
-  if (!d.started_at) t.textContent = "";
+  m.querySelector(".t").dataset.since = d.started_at || "";
   const q = m.querySelector(".qnote");
-  const ahead = docs.slice(0, docs.indexOf(d)).filter(x => x.status === "pending" && x.stage === "queued").length;
+  const ahead = docs.slice(0, sel).filter(x => x.status === "pending" && x.stage === "queued").length;
   q.hidden = stage !== "queued";
-  q.innerHTML = `Naenkrat se bere <b>${parallel}</b> dokumentov. Pred tem jih čaka še <b>${ahead}</b>.`;
+  q.innerHTML = readerDown() ? "Bralnik trenutno ne deluje. Dokument se prebere, ko bo spet deloval."
+    : `Naenkrat se bere <b>${parallel}</b> dokumentov. Pred tem jih čaka še <b>${ahead}</b>.`;
   tick();
+}
+let ticking = false;
+function tick() {
+  if (ticking) return;
+  ticking = true;
+  const frame = () => {
+    const t = document.querySelector(".dochead .t[data-since]");
+    if (t) t.textContent = t.dataset.since ? clock(Math.max(0, Date.now() / 1000 - t.dataset.since)) : "";
+    if (t && running) setTimeout(frame, 250); else ticking = false;
+  };
+  frame();
+}
+
+/* the form, with flagged fields as yellow boxes the clerk confirms or corrects */
+function editValue(k, v) { return empty(v) ? "" : TYPES[k] === "number" ? fmtAmount(v) : String(v); }
+function flagBox(d, i, k) {
+  const key = i + "|" + k, id = "fx-" + k, err = errs.get(key), r = reviewed(d, k);
+  const p = (d.confidence || {})[k];
+  const pct = typeof p === "number" ? `<span class="pct">zanesljivost ${Math.round(p * 100)} %</span>` : "";
+  const dis = busy.has(i) ? "disabled" : "";
+  const why = r && r.action === "corrected" ? `Bralnik je prebral: ${esc(plain(k, r.read))}.`
+    : TYPES[k] === "number" ? "Bralnik ni povsem prepričan. Primerjajte s skenom; znesek zapišite kot 2.500,02."
+    : "Bralnik ni povsem prepričan. Primerjajte s skenom na desni.";
+  let control, name;
+  if (TYPES[k] === "boolean") {
+    const cur = drafts.has(key) ? drafts.get(key) : d[k];
+    const yes = k === "signature_present" ? "podpisano" : "da", no = k === "signature_present" ? "ni podpisa" : "ne";
+    name = `<span class="name" id="${id}-l">${LABEL[k]}</span>`;
+    control = `<div class="yn" role="radiogroup" aria-labelledby="${id}-l" aria-describedby="${id}-why">
+      <label><input type="radio" name="${id}" value="true" data-k="${k}" ${cur === true ? "checked" : ""} ${dis}>${yes}</label>
+      <label><input type="radio" name="${id}" value="false" data-k="${k}" ${cur === false ? "checked" : ""} ${dis}>${no}</label></div>`;
+  } else {
+    const val = drafts.has(key) ? drafts.get(key) : editValue(k, d[k]);
+    name = `<label for="${id}">${LABEL[k]}</label>`;
+    control = `<input type="text" id="${id}" data-k="${k}" value="${esc(val)}" autocomplete="off" spellcheck="false" ${TYPES[k] === "number" ? 'inputmode="decimal"' : ""}
+      ${err ? `class="bad" aria-invalid="true" aria-describedby="${id}-err ${id}-why"` : `aria-invalid="false" aria-describedby="${id}-why"`} ${dis}>`;
+  }
+  return `<div class="flag" data-k="${k}">
+    <div class="head">${name}${pct}</div>
+    <div class="fixrow">${control}
+      <button class="btn ok big" data-act="ok" data-k="${k}" ${dis}>Pravilno</button>
+      <button class="btn big" data-act="fix" data-k="${k}" ${dis}>Shrani popravek</button>
+    </div>
+    ${err ? `<span class="inerr" id="${id}-err">${esc(err)}</span>` : ""}
+    <p class="why" id="${id}-why">${why}</p>
+  </div>`;
+}
+function fieldBox(d, i, k, label = LABEL[k]) {
+  const r = reviewed(d, k), fixed = r && r.action === "corrected", v = d[k];
+  const cls = empty(v) ? "none" : fixed ? "fixed" : HAND.has(k) ? "pen" : "";
+  const alt = MODE === "both" && differs(d, k) && d.compare && d.compare.result ? `<span class="alt">${esc(plain(k, d.compare.result[k]))}</span>` : "";
+  const redo = r && !confirmed(d) && k in TYPES ? `<button class="btn ghost redo" data-act="edit" data-k="${k}" aria-label="Spremeni: ${esc(label)}">Spremeni</button>` : "";
+  return `<div class="f ${differs(d, k) ? "diff" : ""}"><div class="l">${esc(label)}</div><div class="v ${cls}">${esc(plain(k, v))}</div>${fixed ? `<del class="was"><span class="sr">prebrano </span>${esc(plain(k, r.read))}</del>` : ""}${alt}${redo}</div>`;
+}
+// A group of fields: the open flags first (full width), the rest in a grid.
+function group(d, i, keys, labels = {}) {
+  const flags = keys.filter(k => flagOpen(d, i, k));
+  const rest = keys.filter(k => !flags.includes(k));
+  return flags.map(k => flagBox(d, i, k)).join("") + (rest.length ? `<div class="grid3">${rest.map(k => fieldBox(d, i, k, labels[k])).join("")}</div>` : "");
+}
+function emptyRows(rows) {
+  if (!rows.length) return "";
+  if (rows.length === 1) return `Vrstica ${rows[0]} je prazna.`;
+  if (rows.length === 2) return `Vrstici ${rows[0]} in ${rows[1]} sta prazni.`;
+  return `Vrstice ${rows[0]}–${rows[rows.length - 1]} so prazne.`;
+}
+function formHtml(d, i) {
+  const touched = k => flagOpen(d, i, k) || reviewed(d, k);
+  const idKeys = ["documentation_number", "beneficiary_number"];
+  const headFlags = ["case_number", ...idKeys].filter(k => flagOpen(d, i, k));
+  const ids = `${headFlags.map(k => flagBox(d, i, k)).join("")}<div class="ids">
+      ${fieldBox(d, i, "document_id")}${fieldBox(d, i, "vk")}
+      ${idKeys.filter(k => !flagOpen(d, i, k)).map(k => fieldBox(d, i, k)).join("")}
+      ${reviewed(d, "case_number") && !flagOpen(d, i, "case_number") ? fieldBox(d, i, "case_number") : ""}
+    </div>`;
+  const emptyR = [], rows = [];
+  [1, 2, 3].forEach(n => {
+    const keys = [`amount${n}`, `currency${n}`, `country${n}`];
+    if (keys.every(k => empty(d[k]) && !touched(k) && !differs(d, k))) emptyR.push(n);
+    else rows.push(`<div class="rowlbl">Vrstica ${n}</div>${group(d, i, keys, { [keys[0]]: "Znesek", [keys[1]]: "Valuta", [keys[2]]: "Država" })}`);
+  });
+  const oc = flagOpen(d, i, "other_country") || reviewed(d, "other_country") || differs(d, "other_country")
+    ? group(d, i, ["other_country"]) + (emptyR.length ? `<span class="hint">${emptyRows(emptyR)}</span>` : "")
+    : `<div class="p1line"><span>${LABEL.other_country}:</span><b>${esc(plain("other_country", d.other_country))}</b>${emptyR.length ? `<span style="color:var(--ink-2)">${emptyRows(emptyR)}</span>` : ""}</div>`;
+  const notes = [d.notes && `<p>${esc(d.notes)}</p>`, ...(d.warnings || []).map(w => `<p class="warn">${esc(warning(w))}</p>`)].filter(Boolean).join("");
+  const files = (d.pages || []).join(", ");
+  return `<div class="card sheet">
+    ${ids}
+    <div class="sec"><span class="lbl">Stran 1 · pokojnina iz druge države</span>${oc}${rows.join("")}</div>
+    <div class="sec"><span class="lbl">Stran 2 · lastnoročno</span>${group(d, i, ["amount", "currency", "country", "signature_present"])}</div>
+    ${notes ? `<div class="notes"><span class="lbl">Opombe bralnika</span>${notes}</div>` : ""}
+    <div class="f files"><div class="l">${(d.pages || []).length === 1 ? "Datoteka" : "Datoteki"}</div><div class="v" title="${esc(files)}">${esc(files)}</div></div>
+  </div>`;
+}
+function actionsHtml(d, i) {
+  const dis = busy.has(i) ? "disabled" : "";
+  return `${docErr ? `<span class="inerr" role="alert">${esc(docErr)}</span>` : ""}
+    <div class="actions">
+      <span class="hint"><kbd>↑</kbd> <kbd>↓</kbd> prejšnji / naslednji · <kbd>Enter</kbd> potrdi</span>
+      ${confirmed(d) ? `<button class="btn big" data-act="reopen" ${dis}>Odpri znova</button>`
+        : `<button class="btn dark big" data-act="confirm" ${dis}>Potrdi dokument in naprej →</button>`}
+    </div>`;
+}
+function summaryHtml() {
+  const s = server();
+  const conf = s.filter(confirmed);
+  const fixes = conf.reduce((n, d) => n + corrected(d), 0);
+  const errors = docs.filter(d => d.status === "error").length;
+  const pages = s.reduce((n, d) => n + (d.pages || []).length, 0);
+  const fmt = load(localStorage, "ld-fmt") === "csv" ? "csv" : "json";
+  const ttl = HEALTH && HEALTH.job_ttl_days;
+  return `<div class="done-all">
+    <div><span class="lbl">${esc(jobLabel || "Paket")} · ${pages} ${plural(pages, "stran", "strani", "strani", "strani")}</span>
+      <h2>${errors ? `Pregledani so vsi berljivi dokumenti (${conf.length} od ${docs.length})` : `${plural(docs.length, "Edini", "Oba", "Vsi", "Vseh")} ${docs.length} ${plural(docs.length, "dokument je pregledan", "dokumenta sta pregledana", "dokumenti so pregledani", "dokumentov je pregledanih")}`}</h2></div>
+    <div class="summary">
+      <div><b>${docs.length}</b><span>${plural(docs.length, "dokument", "dokumenta", "dokumenti", "dokumentov")}</span></div>
+      <div><b>${conf.filter(d => !corrected(d)).length}</b><span>brez sprememb</span></div>
+      <div><b>${fixes}</b><span>${plural(fixes, "popravljeno polje", "popravljeni polji", "popravljena polja", "popravljenih polj")}</span></div>
+      <div><b>${errors}</b><span>z napako</span></div>
+    </div>
+    <div role="radiogroup" aria-label="Oblika izvoza" style="display:flex;flex-direction:column;gap:10px">
+      <label class="choice"><input type="radio" name="fmt" value="json" ${fmt === "json" ? "checked" : ""}><div><b>JSON za ZPIZ</b><span>LDDokumentP1 + LDDokumentP2, s popravki. Pri vsakem popravljenem polju je zapisano, kaj je bilo prebrano.</span></div></label>
+      <label class="choice"><input type="radio" name="fmt" value="csv" ${fmt === "csv" ? "checked" : ""}><div><b>CSV</b><span>En dokument v vrstici, za Excel. Stolpec »reviewed« pove, kateri dokumenti so potrjeni, »corrected_fields« pa, katera polja so popravljena.</span></div></label>
+    </div>
+    <div class="actions">
+      <span class="hint">${ttl ? `Rezultati se na strežniku izbrišejo po ${ttl} dneh.` : "Rezultati se na strežniku po nekaj dneh izbrišejo."}</span>
+      <button class="btn dark big" data-act="download" ${jobId && !exporting ? "" : "disabled"}>Prenesi ${fmt === "csv" ? "CSV" : "JSON"}</button>
+    </div>
+  </div>`;
+}
+
+let cmpView = load(localStorage, "ld-cmp-view") || "side", onlyDiff = load(localStorage, "ld-cmp-only") === "1";
+const GROUPS = [
+  ["Glava", [["case_number", "Zadeva"], ["documentation_number", "Št. dokumentacije"], ["beneficiary_number", "Št. upravičenca"], ["document_id", "ID dokumenta · QR"], ["vk", "VK · QR"]]],
+  ["Stran 1", [["other_country", "Pokojnina iz druge države"]]],
+  ...[1, 2, 3].map(i => [`Stran 1 · vrstica ${i}`, [[`amount${i}`, "Znesek"], [`currency${i}`, "Valuta"], [`country${i}`, "Država"]]]),
+  ["Stran 2", [["amount", "Znesek"], ["currency", "Valuta"], ["country", "Država"], ["signature_present", "Podpis"]]],
+];
+function compareHtml(d) {
+  const c = d.compare;
+  if (c.error) return `<span class="cmperr">${c.reader === "claude" ? "Claude" : "Lokalni bralnik"} ni prebral: ${esc(c.error)}</span>`;
+  const n = c.differences.length;
+  const bar = `<div class="cmpbar">
+    <span class="sum">${n ? `<b>${n}</b> ${plural(n, "polje se razlikuje", "polji se razlikujeta", "polja se razlikujejo", "polj se razlikuje")}` : `<b class="ok">Vsa polja enaka</b>`}</span>
+    <span class="tools">
+      ${cmpView === "side" ? `<label class="only"><input type="checkbox" data-cmp="only" ${onlyDiff ? "checked" : ""}> Samo razlike</label>` : ""}
+      <span class="seg" role="group" aria-label="Pogled"><button data-cmp="side" aria-pressed="${cmpView === "side"}">Vzporedno</button><button data-cmp="form" aria-pressed="${cmpView === "form"}">Obrazec</button></span>
+    </span></div>`;
+  if (cmpView !== "side") return bar;
+  const [a, b] = c.reader === "claude" ? [d, c.result] : [c.result, d];  // local left, Claude right
+  const cell = (r, k) => { const p = (r.confidence || {})[k]; return `<div class="cell"><span class="cv ${empty(r[k]) ? "none" : ""}">${esc(plain(k, r[k]))}</span>${typeof p === "number" ? `<span class="pct">${Math.round(p * 100)} %</span>` : ""}</div>`; };
+  const body = GROUPS.map(([title, fields]) => {
+    const rows = fields.filter(([k]) => !onlyDiff || differs(d, k)).map(([k, label]) =>
+      `<tr class="${differs(d, k) ? "diff" : ""}"><th>${label}</th><td>${cell(a, k)}</td><td>${cell(b, k)}</td><td class="mk" title="${differs(d, k) ? "Razlika" : "Enako"}">${differs(d, k) ? "≠" : "="}</td></tr>`).join("");
+    return rows ? `<tbody><tr class="grp"><td colspan="4" class="lbl">${title}</td></tr>${rows}</tbody>` : "";
+  }).join("") || `<tbody><tr class="alldone"><td colspan="4">Lokalno in Claude sta prebrala vsa polja enako.</td></tr></tbody>`;
+  const noteOf = r => [r.notes && `<p>${esc(r.notes)}</p>`, ...(r.warnings || []).map(w => `<p class="warn">${esc(warning(w))}</p>`)].filter(Boolean).join("");
+  return `<div class="card sheet">${bar}
+    <table class="cmp"><colgroup><col class="k"><col><col><col class="mk"></colgroup>
+      <thead><tr><th></th><th><b>Lokalno</b><small>${esc(a.model || "")}</small></th><th><b>Claude</b><small>${esc(b.model || "")}</small></th><th></th></tr></thead>${body}</table>
+    <div class="cmpnotes"><div class="notes"><span class="lbl">Opombe · lokalno</span>${noteOf(a) || "<p>brez opomb</p>"}</div><div class="notes"><span class="lbl">Opombe · Claude</span>${noteOf(b) || "<p>brez opomb</p>"}</div></div>
+  </div>`;
 }
 
 function renderMirror() {
   const m = $("mirror");
-  if (running && phase === "upload") {
-    return panel("Nalagam datoteke", `${MB(up.sent)} / ${MB(up.total)} MB`, up.total ? up.sent / up.total : 0,
-      "Skeni potujejo na strežnik. Ko so naloženi, jih razdelimo na dokumente.");
+  if (running && phase === "upload") return panel("Nalaganje skenov", `${mb(up.sent)} / ${mb(up.total)} MB`, up.total ? up.sent / up.total : 0, "Skeni potujejo na strežnik. Ko so naloženi, se razdelijo na dokumente.");
+  if (running && phase === "split") return panel("Deljenje strani po QR kodi", `${splitting.done} / ${splitting.total || "…"} strani`, splitting.total ? splitting.done / splitting.total : 0, "Vsaka prva stran ima QR kodo. Tam se začne nov dokument; naslednja stran brez nje je njegova druga stran.");
+  if (sel === -1 && allReviewed()) {
+    const sig = "summary" + JSON.stringify(docs) + exporting + load(localStorage, "ld-fmt");
+    if (lastMirror === sig && m.dataset.view === "summary") return;
+    lastMirror = sig; m.dataset.view = "summary"; m.innerHTML = summaryHtml(); return;
   }
-  if (running && phase === "split") {
-    return panel("Delim strani po QR kodi", `${splitting.done} / ${splitting.total || "…"} strani`, splitting.total ? splitting.done / splitting.total : 0,
-      "Vsaka prva stran ima QR kodo. Tam se začne nov dokument; naslednja stran brez nje je njegova druga stran.");
-  }
+  if (sel === -1) sel = 0;
   const d = docs[sel];
   if (!d) { m.dataset.view = ""; m.innerHTML = ""; return; }
   if (d.status === "pending") return reading(d);
-  const sig = sel + cmpView + onlyDiff + JSON.stringify(d);
+  const sig = [sel, docs.length, cmpView, onlyDiff, MODE, docErr, [...editing].join(), [...errs].join(), [...busy].join(), JSON.stringify(d)].join("§");
   if (sig === lastMirror && m.dataset.view === "doc") return;
+  // keep focus where it was (a re-render replaces the inputs)
+  const focusK = document.activeElement?.closest?.("#mirror [data-k]")?.dataset.k;
+  const focusAct = document.activeElement?.closest?.("#mirror [data-act]")?.dataset.act;
   lastMirror = sig;
   m.dataset.view = "doc";
   if (d.status === "error") {
-    m.innerHTML = `<div class="sheet"><div class="errorbox">${esc(d.error)}</div><div class="meta"><span>${esc((d.pages || []).join(" + "))}</span></div></div>`;
+    m.innerHTML = head(d, `<span class="tag err">${errTag(d)}</span>`) + (d.local && /ni sken\.$/.test(d.error)
+      ? `<div class="errorbox"><b>${esc(d.error)}</b><span>Sprejmemo TIFF, PDF, PNG, JPG ali ZIP s temi datotekami.</span></div>`
+      : `<div class="errorbox"><b>Dokumenta ni bilo mogoče prebrati v celoti.</b><span>${esc(d.error)}</span></div>`)
+      + `<div class="f files"><div class="l">Datoteke</div><div class="v">${esc((d.pages || []).join(", "))}</div></div>`;
     return;
   }
-  fieldIndex = 0;
-  const reveal = !revealed.has(docKey(d));
-  revealed.add(docKey(d));
-  const u = d.usage || {};
-  const metrics = d.usage && String(d.model || "").startsWith("local") ? `<div class="metrics" title="Prebrano lokalno, brez zunanjega API.">
-      <div><b>${secs(u.duration_ms || 0)}</b><span>branje</span></div>
-      <div><b>lokalno</b><span>${esc(String(d.model).replace(/^local \(|\)$/g, ""))}</span></div>
-      <div class="cost"><b>0 $</b><span>brez API</span></div></div>`
-    : d.usage ? `<div class="metrics" title="Cena je izračunana po ceniku Anthropic API. Prek claude-pool se plača naročnina, ne ta znesek.">
-      <div><b>${secs(u.duration_ms || 0)}</b><span>branje</span></div>
-      <div><b>${nf(tokens(u))}</b><span>žetonov · ${nf(u.input_tokens + u.cache_read_tokens + u.cache_write_tokens)} vhod, ${nf(u.output_tokens)} izhod</span></div>
-      <div class="cost"><b>${usd(u.cost_usd || 0)}</b><span>po ceni API</span></div></div>` : "";
-  const c = d.compare, cu = (c && c.result && c.result.usage) || {};
-  let other = !c ? "" : c.error
-    ? `<div class="metrics other"><span class="err">${c.reader === "claude" ? "Claude" : "Lokalni bralnik"} ni prebral: ${esc(c.error)}</span></div>`
-    : `<div class="metrics other" title="Drugo branje istega dokumenta. Polja, kjer se razlikuje, so označena spodaj.">
-      <div><b>${c.reader === "claude" ? "Claude" : "lokalno"}</b><span>${esc(c.result.model || "")}</span></div>
-      <div><b>${secs(cu.duration_ms || 0)}</b><span>branje</span></div>
-      <div><b>${c.differences.length}</b><span>${c.differences.length === 1 ? "razlika" : "razlik"}</span></div>
-      <div class="cost"><b>${usd(cu.cost_usd || 0)}</b><span>po ceni API</span></div></div>`;
-  if (c && c.result) {
-    const n = c.differences.length;
-    const bar = `<div class="cmpbar">
-      <span class="sum">${n ? `<b>${n}</b> ${n === 1 ? "polje se razlikuje" : n === 2 ? "polji se razlikujeta" : n < 5 ? "polja se razlikujejo" : "polj se razlikuje"}` : `<b class="ok">Vsa polja enaka</b>`}</span>
-      <span class="tools">
-        ${cmpView === "side" ? `<label class="only"><input type="checkbox" data-cmp="only" ${onlyDiff ? "checked" : ""}> Samo razlike</label>` : ""}
-        <span class="seg" role="group" aria-label="Pogled"><button data-cmp="side" aria-pressed="${cmpView === "side"}">Vzporedno</button><button data-cmp="form" aria-pressed="${cmpView === "form"}">Obrazec</button></span>
-      </span></div>`;
-    if (cmpView === "side") {
-      const [a, b] = c.reader === "claude" ? [d, c.result] : [c.result, d];  // local left, Claude right
-      const cell = (r, k) => `<div class="cell"><span class="cv ${r[k] === null || r[k] === undefined ? "none" : ""}">${esc(plain(k, r[k]))}</span>${signal(r, k)}</div>`;
-      const body = GROUPS.map(([title, fields]) => {
-        const rows = fields.filter(([k]) => !onlyDiff || differs(d, k)).map(([k, label]) => {
-          const diff = differs(d, k);
-          return `<tr class="${diff ? "diff" : ""}"><th>${label}</th><td>${cell(a, k)}</td><td>${cell(b, k)}</td><td class="mk" title="${diff ? "Razlika" : "Enako"}">${diff ? "≠" : "="}</td></tr>`;
-        }).join("");
-        return rows ? `<tbody><tr class="grp"><td colspan="4" class="label">${title}</td></tr>${rows}</tbody>` : "";
-      }).join("") || `<tbody><tr class="alldone"><td colspan="4">Lokalno in Claude sta prebrala vsa polja enako.</td></tr></tbody>`;
-      const noteOf = r => [r.notes && `<p>${esc(r.notes)}</p>`, ...(r.warnings || []).map(w => `<p class="warn">${esc(w)}</p>`)].filter(Boolean).join("");
-      m.innerHTML = `<article class="sheet ${reveal ? "reveal" : ""}">
-        ${metrics}${other}${bar}
-        <table class="cmp">
-          <colgroup><col class="k"><col><col><col class="mk"></colgroup>
-          <thead><tr><th></th><th><b>Lokalno</b><small>${esc(a.model || "")}</small></th><th><b>Claude</b><small>${esc(b.model || "")}</small></th><th></th></tr></thead>
-          ${body}
-        </table>
-        <div class="cmpnotes">
-          <div class="notes"><span class="label">Opombe · lokalno</span>${noteOf(a) || "<p>brez opomb</p>"}</div>
-          <div class="notes"><span class="label">Opombe · Claude</span>${noteOf(b) || "<p>brez opomb</p>"}</div>
-        </div>
-        <div class="meta"><span>${esc((d.pages || []).join(" + "))}</span></div>
-      </article>`;
-      if (reveal) $("mirror").scrollTo({ top: 0 });
-      return;
-    }
-    other += bar;
-  }
-  const rows = [1, 2, 3].map(i => {
-    const keys = [`amount${i}`, `currency${i}`, `country${i}`];
-    if (keys.every(k => d[k] === null && !needsCheck(d, k) && !differs(d, k))) {
-      return `<div class="row empty"><span class="n">${i}</span><span class="what">Vrstica je prazna</span><span class="f" style="--i:${fieldIndex++}">${signal(d, keys[0])}</span></div>`;
-    }
-    return `<div class="row"><span class="n">${i}</span>
-      <div class="pair">${field(d, keys[0], "Znesek", comb(d[keys[0]]))}${field(d, keys[1], "Valuta", boxes(CURRENCIES, d[keys[1]]))}</div>
-      ${field(d, keys[2], "Država", boxes(COUNTRIES, d[keys[2]]))}</div>`;
-  }).join("");
-  const notes = [d.notes && `<p>${esc(d.notes)}</p>`, ...(d.warnings || []).map(w => `<p class="warn">${esc(w)}</p>`)].filter(Boolean).join("");
-  const handText = v => v ? `<span class="v pen"><span class="line">${esc(v)}</span></span>` : text(null);
-  m.innerHTML = `<article class="sheet ${reveal ? "reveal" : ""}">
-    ${metrics}${other}
-    <div class="ids">
-      ${field(d, "case_number", "Zadeva", text(d.case_number))}
-      ${field(d, "document_id", "ID dokumenta · QR", text(d.document_id))}
-      ${field(d, "vk", "VK · QR", text(d.vk))}
-    </div>
-    <div class="sec"><h3 class="label">Stran 1 · Pokojnina iz druge države</h3>
-      ${field(d, "other_country", "Prejema pokojnino iz države, ki ni Slovenija", yesno(d.other_country))}
-    </div>
-    <div class="sec"><h3 class="label">Stran 1 · Zneski</h3>${rows}</div>
-    <div class="sec"><h3 class="label">Stran 2 · Država ni na seznamu</h3>
-      <div class="hand">
-        ${field(d, "amount", "Znesek", comb(d.amount))}
-        ${field(d, "currency", "Valuta", handText(d.currency))}
-        ${field(d, "country", "Država", handText(d.country))}
-      </div>
-    </div>
-    <div class="sec"><h3 class="label">Stran 2 · Podpis</h3>
-      ${field(d, "signature_present", "Podpis upokojenca ali zakonitega zastopnika", `<span class="v"><span class="yesno"><span class="box ${d.signature_present ? "on" : ""}">podpisano</span>${d.signature_present === false ? '<span class="aside">polje je prazno</span>' : ""}</span></span>`)}
-    </div>
-    ${notes ? `<div class="notes">${notes}</div>` : ""}
-    <div class="meta"><span>${esc((d.pages || []).join(" + "))}</span><span>${esc(d.model || "")}</span></div>
-  </article>`;
-  if (reveal) $("mirror").scrollTo({ top: 0 });
+  const n = openCount(d, sel);
+  const right = confirmed(d) ? (corrected(d) ? `<span class="tag fix">Popravljeno ${corrected(d)}</span>` : `<span class="tag ok">Potrjeno</span>`)
+    : n ? `<span class="left"><b>${n} ${plural(n, "polje", "polji", "polja", "polj")}</b> za preverbo</span>` : `<span class="left">Ni polj za preverbo</span>`;
+  const reveal = !revealed.has(sel);
+  revealed.add(sel);
+  const showCmp = MODE === "both" && d.compare;
+  m.innerHTML = head(d, right)
+    + (showCmp ? compareHtml(d) : "")
+    + (showCmp && cmpView === "side" && !d.compare.error ? "" : formHtml(d, sel))
+    + actionsHtml(d, sel);
+  if (reveal) { m.firstElementChild.nextElementSibling?.classList.add("reveal"); m.scrollTo({ top: 0 }); }
+  if (focusK) (m.querySelector(`input[data-k="${focusK}"]:checked`) || m.querySelector(`input[data-k="${focusK}"]`) || m.querySelector(`[data-k="${focusK}"]`))?.focus();
+  else if (focusAct) m.querySelector(`[data-act="${focusAct}"]`)?.focus();
 }
 
+/* ---------- review actions (PATCH /v1/batch/{id}/documents/{i}) ---------- */
+function readControl(i, k) {
+  const m = $("mirror");
+  if (TYPES[k] === "boolean") {
+    const r = m.querySelector(`input[name="fx-${k}"]:checked`);
+    return { value: r ? r.value === "true" : null };
+  }
+  const el = $("fx-" + k);
+  const s = el ? el.value : editValue(k, docs[i][k]);
+  if (TYPES[k] === "number") return parseAmount(s);
+  return { value: s.trim() || null };
+}
+async function patch(i, body) {
+  busy.add(i); docErr = ""; renderMirror();
+  try {
+    const doc = await api(`/v1/batch/${jobId}/documents/${i}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    patchedAt[i] = performance.now();
+    docs[i] = { ...docs[i], ...doc, status: doc.status || "done" };
+    return true;
+  } catch (e) {
+    if (e.status !== 401) docErr = `Ni shranjeno: ${e.message}`;
+    return false;
+  } finally { busy.delete(i); render(); }
+}
+async function fieldAct(k, kind) {
+  const i = sel, d = docs[i], key = i + "|" + k;
+  if (!d || busy.has(i)) return;
+  let f;
+  if (kind === "ok") {
+    // "Pravilno" = what the reader read is right. Opened again after a correction it keeps the shown value.
+    f = reviewed(d, k) && reviewed(d, k).action === "corrected" ? { action: "corrected", value: d[k] } : { action: "confirmed" };
+  } else {
+    const v = readControl(i, k);
+    if (v.error) { errs.set(key, v.error); lastMirror = ""; renderMirror(); $("fx-" + k)?.focus(); return; }
+    f = { action: "corrected", value: v.value };
+  }
+  errs.delete(key);
+  if (await patch(i, { fields: { [k]: f } })) {
+    drafts.delete(key); editing.delete(key); lastMirror = "";
+    renderMirror();
+    // on to the next flag of this document, or to the confirm button
+    const next = $("mirror").querySelector(".flag input:not([type=radio]), .flag input[type=radio]");
+    (next || $("mirror").querySelector('[data-act="confirm"]'))?.focus({ preventScroll: false });
+  }
+}
+async function confirmDoc() {
+  const i = sel, d = docs[i];
+  if (!d || d.status !== "done" || d.local || busy.has(i) || !jobId) return;
+  if (confirmed(d)) return goNext(i);
+  // what the clerk typed into a flag but didn't save goes along with the confirmation
+  const fields = {};
+  for (const k of Object.keys(TYPES).filter(k => flagOpen(d, i, k) && drafts.has(i + "|" + k))) {
+    const v = readControl(i, k);
+    if (v.error) { errs.set(i + "|" + k, v.error); lastMirror = ""; renderMirror(); $("fx-" + k)?.focus(); return; }
+    if (v.value !== d[k]) fields[k] = { action: "corrected", value: v.value };
+  }
+  if (await patch(i, Object.keys(fields).length ? { fields, confirm: true } : { confirm: true })) {
+    [...drafts.keys(), ...editing, ...errs.keys()].filter(k => k.startsWith(i + "|")).forEach(k => { drafts.delete(k); editing.delete(k); errs.delete(k); });
+    goNext(i);
+  }
+}
+function goNext(from) {
+  const order = [...docs.keys()].slice(from + 1).concat([...docs.keys()].slice(0, from));
+  const next = order.find(j => docs[j].status === "done" && !confirmed(docs[j]) && !docs[j].local);
+  if (next !== undefined) return select(next);
+  if (allReviewed()) { follow = false; sel = -1; saveSel(); lastMirror = ""; transition(render); return; }
+  if (from + 1 < docs.length) select(from + 1);
+}
+$("mirror").addEventListener("click", async e => {
+  const c = e.target.closest("[data-cmp]");
+  if (c) {
+    if (c.dataset.cmp === "only") onlyDiff = c.checked; else cmpView = c.dataset.cmp;
+    store(localStorage, "ld-cmp-view", cmpView); store(localStorage, "ld-cmp-only", onlyDiff ? "1" : "0");
+    return renderMirror();
+  }
+  const b = e.target.closest("button[data-act]");
+  if (!b || b.disabled) return;
+  const k = b.dataset.k;
+  if (b.dataset.act === "ok" || b.dataset.act === "fix") fieldAct(k, b.dataset.act);
+  else if (b.dataset.act === "edit") { editing.add(sel + "|" + k); lastMirror = ""; renderMirror(); $("fx-" + k)?.focus(); $("mirror").querySelector(`input[name="fx-${k}"]`)?.focus(); }
+  else if (b.dataset.act === "confirm") confirmDoc();
+  else if (b.dataset.act === "reopen") { if (await patch(sel, { confirm: false })) $("mirror").querySelector('[data-act="confirm"]')?.focus(); }
+  else if (b.dataset.act === "download") exportAs(load(localStorage, "ld-fmt") === "csv" ? "csv" : "json");
+});
+$("mirror").addEventListener("input", e => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  const key = sel + "|" + k;
+  drafts.set(key, e.target.type === "radio" ? e.target.value === "true" : e.target.value);
+  if (errs.has(key) && e.target.type !== "radio") { errs.delete(key); e.target.classList.remove("bad"); e.target.setAttribute("aria-invalid", "false"); e.target.closest(".flag").querySelector(".inerr")?.remove(); }
+});
+$("mirror").addEventListener("change", e => { if (e.target.name === "fmt") { store(localStorage, "ld-fmt", e.target.value); lastMirror = ""; renderMirror(); } });
+$("mirror").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !e.target.matches(".flag input")) return;
+  e.preventDefault();
+  const k = e.target.dataset.k, key = sel + "|" + k;
+  // unchanged: the reading is right; changed: save the correction
+  fieldAct(k, drafts.has(key) && drafts.get(key) !== (TYPES[k] === "boolean" ? docs[sel][k] : editValue(k, docs[sel][k])) ? "fix" : "ok");
+});
+// the scan follows the field being checked
+$("mirror").addEventListener("focusin", e => { const f = e.target.closest(".flag"); if (f) showPage(pageOf(f.dataset.k)); });
+
+/* ---------- export ---------- */
+async function exportAs(fmt) {
+  if (!jobId || exporting) return;
+  exporting = true; $("experr").hidden = true; render();
+  try {
+    const r = await fetch(`/v1/batch/${jobId}/export?format=${fmt}`, { headers: { Authorization: "Bearer " + KEY } });
+    if (r.status === 401) { signOut(true); return; }
+    if (!r.ok) throw new Error(`Strežnik je vrnil napako ${r.status}.`);
+    const name = (r.headers.get("Content-Disposition") || "").match(/filename="?([^";]+)"?/)?.[1] || `ld-${jobId.slice(0, 8)}.${fmt}`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (e) {
+    $("experr").textContent = `Izvoz ni uspel: ${e.message === "Failed to fetch" ? NO_SERVER : e.message}`;
+    $("experr").hidden = false;
+  } finally { exporting = false; lastMirror = ""; render(); }
+}
+document.querySelectorAll("[data-export]").forEach(b => b.addEventListener("click", () => exportAs(b.dataset.export)));
+
+/* ---------- the scan ---------- */
 let scanToken = 0;
 async function renderScan() {
   const d = docs[sel];
   const pages = d?.pages || [];
-  const reading = d?.status === "pending" && (d.stage === "page1" || d.stage === "page2") ? (d.stage === "page2" ? 1 : 0) : -1;
+  const readingPage = d?.status === "pending" && (d.stage === "page1" || d.stage === "page2") ? (d.stage === "page2" ? 1 : 0) : -1;
   const pending = d?.status === "pending" && READING.has(d.stage);
   const doc = `${sel}|${pages.join("|")}`;
-  const sig = `${doc}|${pending}|${reading}|${pages.map(n => sources.has(n)).join("")}`;
+  const sig = `${doc}|${pending}|${readingPage}|${sourcesReady}|${pages.map(n => sources.has(n)).join("")}`;
   if (sig === lastScan) return;
   const sameDoc = lastScan.startsWith(doc + "|");
   lastScan = sig;
-  $("tabs").innerHTML = pages.map((p, i) => `<button class="tab" data-p="${i}">Stran ${i + 1}</button>`).join("")
-    + `<span class="hint"><kbd>j</kbd> <kbd>k</kbd> dokumenti</span>`;
+  $("tabs").innerHTML = pages.map((p, i) => `<button data-p="${i}" aria-pressed="${i === 0}">Stran ${i + 1}</button>`).join("") + `<span class="file" id="pgfile">${esc(pages[0] || "")}</span>`;
   const view = $("view");
   const token = ++scanToken;
-  if (!pages.length) { view.innerHTML = ""; return; }
+  if (!pages.length || d.local && /ni sken\.$/.test(d.error)) { view.innerHTML = ""; return; }
   const urls = await Promise.all(pages.map(async name => {
-    if (!sources.has(name)) return undefined;
+    if (!sources.has(name)) return sourcesReady ? false : undefined;
     if (!rendered.has(name)) rendered.set(name, await sources.get(name)().catch(() => null));
     return rendered.get(name);
   }));
   if (token !== scanToken) return;
   const top = view.scrollTop;
-  view.innerHTML = pages.map((name, i) => `<div class="page ${pending && (reading < 0 || reading === i) ? "scanning" : ""}" id="pg${i}">${
-    urls[i] ? `<img src="${urls[i]}" alt="Sken: ${esc(name)}">` : `<div class="ph">${urls[i] === null ? "Predogled ni na voljo za to datoteko." : "Pripravljam predogled …"}</div>`
-  }<span class="no">${i + 1} / ${pages.length}</span></div>`).join("");
+  view.innerHTML = pages.map((name, i) => `<div class="page ${pending && (readingPage < 0 || readingPage === i) ? "scanning" : ""}" id="pg${i}">${
+    urls[i] ? `<img src="${urls[i]}" alt="Sken strani ${i + 1}: ${esc(name)}">`
+    : `<div class="ph">${urls[i] === null ? "Predogled ni na voljo za to datoteko." : urls[i] === false ? "Predogled skena je na voljo samo v oknu, kjer so bili skeni naloženi." : "Pripravljam predogled …"}</div>`
+  }<span class="no">${i + 1} / ${pages.length}${urls[i] ? " · klik za povečavo" : ""}</span></div>`).join("");
   view.style.scrollBehavior = "auto";
   view.scrollTop = sameDoc ? top : 0;
   view.style.scrollBehavior = "";
-  if (follow && reading >= 0) showPage(reading);
+  if (follow && readingPage >= 0) showPage(readingPage);
   markPage();
 }
-
 // The tab of the page that fills the top third of the view is lit while scrolling.
 function markPage() {
   const view = $("view"), line = view.getBoundingClientRect().top + view.clientHeight / 3;
   const els = [...view.querySelectorAll(".page")];
   let on = 0;
   els.forEach((el, i) => { if (el.getBoundingClientRect().top <= line) on = i; });
-  if (view.scrollTop + view.clientHeight >= view.scrollHeight - 4) on = els.length - 1;
-  $("tabs").querySelectorAll(".tab").forEach((t, i) => t.classList.toggle("on", i === on));
+  if (els.length && view.scrollTop > 0 && view.scrollTop + view.clientHeight >= view.scrollHeight - 4) on = els.length - 1;
+  $("tabs").querySelectorAll("button").forEach((t, i) => t.setAttribute("aria-pressed", i === on));
+  const f = $("pgfile"); if (f) f.textContent = (docs[sel]?.pages || [])[on] || "";
 }
-function showPage(i) { $("pg" + i)?.scrollIntoView({ block: "start" }); }
-
+function showPage(i) { const el = $("pg" + i); if (el) $("view").scrollTo({ top: el.offsetTop - $("view").offsetTop, behavior: reduced() ? "auto" : "smooth" }); }
 $("view").addEventListener("scroll", () => requestAnimationFrame(markPage), { passive: true });
-$("tabs").addEventListener("click", e => {
-  const t = e.target.closest(".tab");
-  if (t) showPage(+t.dataset.p);
-});
-$("mirror").addEventListener("click", e => {
-  const t = e.target.closest("[data-cmp]");
-  if (!t) return;
-  if (t.dataset.cmp === "only") onlyDiff = t.checked;
-  else cmpView = t.dataset.cmp;
-  try { localStorage.setItem("ld-cmp-view", cmpView); localStorage.setItem("ld-cmp-only", onlyDiff ? "1" : "0"); } catch {}
-  renderMirror();
-});
+$("tabs").addEventListener("click", e => { const t = e.target.closest("button[data-p]"); if (t) showPage(+t.dataset.p); });
 $("view").addEventListener("click", e => { if (e.target.tagName === "IMG") $("view").classList.toggle("zoom"); });
 
+/* ---------- keyboard ---------- */
 document.addEventListener("keydown", e => {
-  if (e.target.matches("input, textarea") || !document.body.classList.contains("working")) return;
-  if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); select(sel + 1); }
-  if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); select(sel - 1); }
-  if (/^[1-9]$/.test(e.key)) showPage(+e.key - 1);
+  if (!document.body.classList.contains("working") || $("help").open || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.target.matches("input, textarea, select")) return;
+  const vis = visible();
+  const at = vis.indexOf(sel);
+  if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); select(vis[at < 0 ? 0 : Math.min(at + 1, vis.length - 1)], true); }
+  else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); select(vis[at < 0 ? 0 : Math.max(at - 1, 0)], true); }
+  else if (e.key === "Enter" && (!e.target.closest("button, a") || e.target.closest(".item"))) { e.preventDefault(); confirmDoc(); }
+  else if (/^[1-9]$/.test(e.key)) showPage(+e.key - 1);
 });
 
-$("dl").addEventListener("click", () => {
-  const out = docs.filter(d => d.status === "done").map(({ status, ...d }) => d);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
-  a.download = `ld-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-});
+/* ---------- help ---------- */
+$("helpbtn").addEventListener("click", () => $("help").showModal());
+$("helpclose").addEventListener("click", () => $("help").close());
+$("help").addEventListener("click", e => { if (e.target === $("help")) $("help").close(); });
+
+/* ---------- start ---------- */
+keyUi();
+checkHealth();
+// A stored key was right when it was saved; it isn't probed again (any 401 later signs out with the message).
+if (KEY) { $("key").value = KEY; keyOk = true; keyUi(); restore(); }
 </script>
 </body>
 </html>
