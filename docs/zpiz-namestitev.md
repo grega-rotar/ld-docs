@@ -76,14 +76,13 @@ server {
 ## Namestitev
 
 ```bash
-sudo mkdir -p /opt/ld-docs/certs && cd /opt/ld-docs
+sudo mkdir -p /opt/ld-docs && cd /opt/ld-docs
 # compose.yml in .env.example iz repozitorija (deploy/zpiz/)
 curl -fsSLO https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/compose.yml
 curl -fsSL -o .env https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/.env.example
 chmod 600 .env
 # vpišite prave vrednosti (spodaj "Nastavitve"); IMAGE_TAG nastavite na izbrani git sha
 vi .env
-# po potrebi CA gruče v certs/ca.pem in VLM_CA_BUNDLE=/certs/ca.pem (spodaj "CA gruče")
 docker compose config --quiet      # preveri .env: manjkajoča obvezna spremenljivka se izpiše
 docker compose pull
 docker compose up -d
@@ -110,8 +109,7 @@ Ena datoteka `.env` poleg `compose.yml`. Compose da vsakemu vsebniku samo spreme
 | `VLM_URL` | (obvezno) | osnovni URL modela, konča se z `/v1`, npr. `https://<model-route>.apps.<cluster>.<domain>/v1`. Tudi oblika MaaS (`…/<projekt>/<model>/v1`) je samo drug `VLM_URL`. |
 | `VLM_KEY` | (obvezno) | žeton service accounta ali ključ MaaS; pošlje se kot `Authorization: Bearer …` |
 | `VLM_MODEL` | `redhataiqwen36-35b-a3b` | ime modela, kot ga vrne `GET {VLM_URL}/models` |
-| `VLM_CA_BUNDLE` | (prazno: sistemski CA) | `/certs/ca.pem`, če certifikata gruče ne podpiše javni CA |
-| `VLM_VERIFY_TLS` | `1` | `0` izklopi preverjanje certifikata (samo začasno, ob zagonu se izpiše opozorilo) |
+| `VLM_VERIFY_TLS` | `0` | `0` = certifikat gruče se ne preverja, certifikati na VM niso potrebni (ob zagonu se izpiše opozorilo); `1` = preverja se s sistemskimi CA |
 | `VLM_TIMEOUT` | `120` | sekunde čakanja na en odgovor modela |
 | `JOB_TTL_DAYS` | `7` | po koliko dneh se rezultati paketa izbrišejo |
 | `LOCAL_PARALLEL` | `3` | koliko dokumentov paketa API hkrati pošlje bralniku |
@@ -129,33 +127,18 @@ En ključ za vsakega odjemalca v `API_KEYS` (npr. en za referente, en za vsak si
 lahko enega zamenjate brez drugih. Za `READER_KEY` ločen ključ. Po spremembi `.env`: `docker compose up -d`
 (ponovno ustvari samo spremenjene vsebnike).
 
-### CA gruče
-
-Če `curl` do `VLM_URL` javi napako certifikata, gruči ne zaupa sistemski seznam CA. Verigo certifikatov
-pokaže:
-
-```bash
-openssl s_client -showcerts -connect <model-route>.apps.<cluster>.<domain>:443 </dev/null
-```
-
-V `certs/ca.pem` shranite **korenski** (in po potrebi vmesni) certifikat v obliki PEM, od
-`-----BEGIN CERTIFICATE-----` do `-----END CERTIFICATE-----`. Najbolje ga dobite od skrbnikov OpenShift
-(ingress CA ali CA podjetja), ne iz izpisa zgoraj. Nato v `.env` `VLM_CA_BUNDLE=/certs/ca.pem` in
-`docker compose up -d`. Imenik `certs/` se v bralnik priklopi samo za branje.
-
 ## Preverjanje modela z VM
 
 Pred prvim zagonom preverite, da VM doseže model. Vrednosti preberite iz `.env`, da žeton ni v zgodovini ukazov:
 
 ```bash
 cd /opt/ld-docs && set -a && . ./.env && set +a
-CA=${VLM_CA_BUNDLE:+--cacert certs/ca.pem}
 
 # 1. seznam modelov: med "id" mora biti VLM_MODEL
-curl -sS $CA -H "Authorization: Bearer $VLM_KEY" "$VLM_URL/models"
+curl -sSk -H "Authorization: Bearer $VLM_KEY" "$VLM_URL/models"
 
 # 2. besedilni klic
-curl -sS $CA -H "Authorization: Bearer $VLM_KEY" -H "Content-Type: application/json" "$VLM_URL/chat/completions" \
+curl -sSk -H "Authorization: Bearer $VLM_KEY" -H "Content-Type: application/json" "$VLM_URL/chat/completions" \
   -d '{"model": "'"$VLM_MODEL"'", "temperature": 0, "max_tokens": 8,
        "chat_template_kwargs": {"enable_thinking": false},
        "messages": [{"role": "user", "content": "Answer with only the word OK."}]}'
@@ -173,13 +156,13 @@ b = io.BytesIO(); im.save(b, 'PNG'); print(base64.b64encode(b.getvalue()).decode
 printf '{"model": "%s", "temperature": 0, "max_tokens": 16, "chat_template_kwargs": {"enable_thinking": false},
  "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,%s"}},
  {"type": "text", "text": "Transcribe the text. Answer with only the text."}]}]}' "$VLM_MODEL" "$IMG" > /tmp/probe.json
-curl -sS $CA -H "Authorization: Bearer $VLM_KEY" -H "Content-Type: application/json" \
+curl -sSk -H "Authorization: Bearer $VLM_KEY" -H "Content-Type: application/json" \
   "$VLM_URL/chat/completions" -d @/tmp/probe.json
 rm /tmp/probe.json
 ```
 
 V odgovoru mora biti `"content": "SEK"` (v `choices[0].message`). Napake: `401` žeton ni veljaven ali je potekel,
-`404` napačen `VLM_URL` ali `VLM_MODEL`, `SSL certificate problem` glejte "CA gruče".
+`404` napačen `VLM_URL` ali `VLM_MODEL`.
 
 ### Kdaj poteče žeton
 
@@ -273,7 +256,7 @@ docker compose up -d            # brez "pull": slike so že lokalno
   `docker compose up -d`. Ključe menjajte redno (npr. letno) in ob odhodu ljudi, ki so jih poznali.
 - `.env` naj ima način `600` in lastnika, ki upravlja storitev. V njem so `API_KEYS`, `READER_KEY` in
   `VLM_KEY`.
-- `.env` in `certs/` nikoli ne dajte v git ali v zahtevke za podporo. Pri pošiljanju dnevnikov preverite,
+- `.env` nikoli ne dajte v git ali v zahtevke za podporo. Pri pošiljanju dnevnikov preverite,
   da v njih ni ključev.
 - Pred API mora biti TLS (reverse proxy); vrata 8080 naj bodo dosegljiva samo s proxyja.
 - Bralnik nima objavljenih vrat; doseže ga samo `api` v omrežju compose, z `READER_KEY`.
@@ -309,7 +292,6 @@ samo označenih. Skeni in rezultati vsebujejo osebne podatke: po preverjanju izb
 | `401` v dnevniku bralnika pri klicu modela | `VLM_KEY` napačen ali potekel | nov žeton, `.env`, `docker compose up -d`; rok preverite (zgoraj) |
 | `503` ali dokumenti s stanjem napake »vision model unavailable« | model na gruči ne odgovarja (5xx, ni zagnan, preobremenjen) | stanje modela v OpenShift AI; dokumente naložite znova, ko deluje |
 | `503` na vse klice API-ja | `API_KEYS` prazen | vpišite ključe |
-| Napaka TLS (`SSL certificate problem`, `CERTIFICATE_VERIFY_FAILED`) | CA gruče ni znan | `certs/ca.pem` in `VLM_CA_BUNDLE=/certs/ca.pem`; `VLM_VERIFY_TLS=0` samo začasno |
 | Vse je delovalo, nato `401` od modela | žeton je potekel | glejte »Kdaj poteče žeton« |
 | Branje je počasno | malo CPU, model zaseden, premalo hkratnih dokumentov | `docker stats`; več vCPU in `READER_PARALLEL`/`LOCAL_PARALLEL`; čas odgovora modela preverite s klicem s sliko (zgoraj) |
 | `docker compose` javi `required variable … is missing a value` | obvezna spremenljivka manjka v `.env` | vpišite jo (`API_KEYS`, `READER_KEY`, `VLM_URL`, `VLM_KEY`) |

@@ -51,12 +51,10 @@ services:
       VLM_URL: ${VLM_URL:?set VLM_URL in .env}
       VLM_KEY: ${VLM_KEY:?set VLM_KEY in .env}
       VLM_MODEL: ${VLM_MODEL:-redhataiqwen36-35b-a3b}
-      VLM_CA_BUNDLE: ${VLM_CA_BUNDLE:-}  # /certs/ca.pem when the cluster's CA is not in the system store
-      VLM_VERIFY_TLS: ${VLM_VERIFY_TLS:-1}
+      # The cluster's certificate is not checked, so no CA files are needed on the VM. 1 = check it
+      # against the system CAs.
+      VLM_VERIFY_TLS: ${VLM_VERIFY_TLS:-0}
       VLM_TIMEOUT: ${VLM_TIMEOUT:-120}
-    volumes:
-      # The cluster's CA goes in ./certs/ca.pem (docs/zpiz-namestitev.md, "CA"). The directory may stay empty.
-      - ./certs:/certs:ro
     healthcheck:
       # /health also asks the vision model for its model list, so it gets more time than the api's.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=10)"]
