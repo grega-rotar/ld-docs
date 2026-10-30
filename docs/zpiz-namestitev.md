@@ -115,7 +115,9 @@ Ena datoteka `.env` poleg `compose.yml`. Compose da vsakemu vsebniku samo spreme
 | `VLM_KEY` | (obvezno) | žeton service accounta ali ključ MaaS; pošlje se kot `Authorization: Bearer …` |
 | `VLM_MODEL` | `qwen3.6/redhataiqwen36-35b-a3b` | ime modela, kot ga vrne `GET {VLM_URL}/models` (pri Bifrostu s predpono, npr. `qwen3.6/…`) |
 | `VLM_VERIFY_TLS` | `0` | `0` = certifikat gruče se ne preverja, certifikati na VM niso potrebni (ob zagonu se izpiše opozorilo); `1` = preverja se s sistemskimi CA |
-| `VLM_TIMEOUT` | `120` | sekunde čakanja na en odgovor modela |
+| `VLM_TIMEOUT` | `300` | sekunde čakanja na en odgovor modela |
+| `VLM_THINKING_TOKENS` | `8000` | koliko žetonov model lahko »razmišlja« pred vsakim odgovorom. Qwen3.6 za Bifrostom razmišlja, ker Bifrost ne posreduje `"enable_thinking": false`; to branje zelo upočasni. `0`, ko je razmišljanje na strežniku modela izklopljeno. |
+| `READER_TIMEOUT` | `900` | sekunde, ki jih API čaka, da bralnik prebere en dokument |
 | `JOB_TTL_DAYS` | `7` | po koliko dneh se rezultati paketa izbrišejo |
 | `LOCAL_PARALLEL` | `3` | koliko dokumentov paketa API hkrati pošlje bralniku |
 | `READER_PARALLEL` | `2` | koliko dokumentov bralnik bere hkrati (okrog 1 na vCPU) |
@@ -305,6 +307,8 @@ povezavo API -> bralnik, bralnik -> model in `/health`, ključev ne izpiše. Pop
 | Vse je delovalo, nato `401` od modela | žeton je potekel | glejte »Kdaj poteče žeton« |
 | Stran se na VM odpre (`curl http://127.0.0.1:8080/health`), od drugod pa ne | požarni zid VM | odprite `HTTP_PORT` (glejte »Omrežje in TLS«) |
 | Vsebnik se ne zažene, v dnevniku `address already in use` | vrata `HTTP_PORT` ali `READER_PORT` na VM že uporablja drug program | v `.env` izberite prosta vrata, `docker compose up -d` |
+| Dokument: »the vision model was still thinking after … tokens« | model razmišlja dlje, kot dovoli `VLM_THINKING_TOKENS` | zvišajte `VLM_THINKING_TOKENS` v `.env`; trajna rešitev je izklop razmišljanja na strežniku modela |
+| Dokument: »the reader did not finish within … s« | model je prepočasen za `READER_TIMEOUT` (običajno, ker razmišlja) | zvišajte `READER_TIMEOUT`, znižajte `READER_PARALLEL`; izklop razmišljanja na strežniku modela |
 | Branje je počasno | malo CPU, model zaseden, premalo hkratnih dokumentov | `docker stats`; več vCPU in `READER_PARALLEL`/`LOCAL_PARALLEL`; čas odgovora modela preverite s klicem s sliko (zgoraj) |
 | `docker compose` javi `required variable … is missing a value` | obvezna spremenljivka manjka v `.env` | vpišite jo (`API_KEYS`, `READER_KEY`, `VLM_URL`, `VLM_KEY`) |
 | Nalaganje velikega paketa se prekine (`413`) | omejitev reverse proxyja | `client_max_body_size` v nginx |

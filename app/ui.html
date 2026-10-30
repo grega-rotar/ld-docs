@@ -604,6 +604,7 @@ function renderBanner() {
   $("bannernote").textContent = !HEALTH ? "Strežnik se ne odziva."
     : waiting ? `${waiting} ${plural(waiting, "dokument čaka", "dokumenta čakata", "dokumenti čakajo", "dokumentov čaka")} v vrsti in se prebere, ko bo spet deloval.`
     : "Skene lahko naložite; prebrani bodo, ko bo bralnik spet deloval.";
+  if (HEALTH && HEALTH.local && HEALTH.local.error) $("bannernote").textContent += ` Vzrok: ${HEALTH.local.error}`;
 }
 $("retry").addEventListener("click", async () => { $("retry").disabled = true; await checkHealth(); $("retry").disabled = false; });
 setInterval(checkHealth, 30000);

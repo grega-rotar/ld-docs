@@ -23,11 +23,12 @@ def openai(monkeypatch):
     monkeypatch.setattr(vlm, "VLM_URL", URL)
     monkeypatch.setattr(vlm, "KEY", "tok")
     monkeypatch.setattr(vlm, "MODEL", "redhataiqwen36-35b-a3b")
-    answer = {"content": "", "status": 200, "calls": []}
+    answer = {"content": "", "status": 200, "finish_reason": "stop", "calls": []}
 
     def post(url, json=None, headers=None, **kw):
         answer["calls"].append({"url": url, "json": json, "headers": headers or {}, **kw})
-        body = {"choices": [{"message": {"role": "assistant", "content": answer["content"]}}]}
+        message = {"role": "assistant", "content": answer["content"]}
+        body = {"choices": [{"message": message, "finish_reason": answer["finish_reason"]}]}
         return httpx.Response(answer["status"], json=body, request=httpx.Request("POST", url))
 
     monkeypatch.setattr(vlm.httpx, "post", post)
@@ -63,6 +64,27 @@ def test_read_amount_and_choose_budgets(openai):
     openai["content"] = "2"
     assert vlm.choose("country", CROP, ["ŠVEDSKA", "ŠVICA", "ŠPANIJA"]) == 1
     assert [c["json"]["max_tokens"] for c in openai["calls"]] == [16, 4]
+
+
+def test_thinking_tokens_are_added_to_every_budget(openai, monkeypatch):
+    monkeypatch.setattr(vlm, "THINKING_TOKENS", 4000)
+    openai["content"] = "<think>a long thought</think>SEK"
+    assert vlm.ask("currency", CROP) == {"kind": "text", "text": "SEK"}
+    openai["content"] = "2"
+    vlm.choose("country", CROP, ["ŠVEDSKA", "ŠVICA"])
+    assert [c["json"]["max_tokens"] for c in openai["calls"]] == [4040, 4004]
+
+
+@pytest.mark.parametrize("content", ["", None, "<think>still thinking", "<think>done</think>  "])
+def test_cut_off_while_thinking_raises(openai, content):
+    openai["content"], openai["finish_reason"] = content, "length"
+    with pytest.raises(vlm.OutOfTokens, match="VLM_THINKING_TOKENS"):
+        vlm.ask("currency", CROP)
+
+
+def test_a_short_answer_at_the_limit_is_kept(openai):
+    openai["content"], openai["finish_reason"] = "3", "length"
+    assert vlm.choose("country", CROP, ["A", "B", "C"]) == 2
 
 
 def test_tls_settings_reach_httpx(openai, monkeypatch):
@@ -105,11 +127,12 @@ def test_health_lists_the_model(openai, monkeypatch):
 
 
 def test_health_with_another_model_or_none(openai, monkeypatch):
-    models(monkeypatch, {"data": [{"id": "something-else"}]})
-    assert TestClient(server.app).get("/health").json()["model_loaded"] is False
+    models(monkeypatch, {"data": [{"id": "qwen3.6/redhataiqwen36-35b-a3b"}]})
+    body = TestClient(server.app).get("/health").json()
+    assert body["model_loaded"] is False and "qwen3.6/redhataiqwen36-35b-a3b" in body["error"]
     models(monkeypatch, httpx.ConnectError("refused"))
     r = TestClient(server.app).get("/health")
-    assert r.status_code == 200 and r.json()["model_loaded"] is False
+    assert r.status_code == 200 and r.json()["model_loaded"] is False and "ConnectError" in r.json()["error"]
 
 
 def test_read_answers_503_when_the_model_server_fails(openai, monkeypatch):
@@ -123,6 +146,18 @@ def test_read_answers_503_when_the_model_server_fails(openai, monkeypatch):
     )
     assert r.status_code == 503
     assert r.json()["detail"].startswith("vision model unavailable")
+
+
+def test_read_answers_503_when_the_model_runs_out_of_tokens(openai, monkeypatch):
+    openai["content"], openai["finish_reason"] = None, "length"
+    monkeypatch.setattr(server, "KEYS", ["k"])
+    monkeypatch.setattr(server, "read_document", lambda pages: {"country": vlm.ask("country", CROP)})
+    png = io.BytesIO()
+    Image.new("L", (50, 50), 255).save(png, format="PNG")
+    r = TestClient(server.app).post(
+        "/v1/read", headers={"Authorization": "Bearer k"}, files=[("files", ("p1.png", png.getvalue(), "image/png"))]
+    )
+    assert r.status_code == 503 and "VLM_THINKING_TOKENS" in r.json()["detail"]
 
 
 def test_ollama_is_the_default_and_unchanged(monkeypatch):

@@ -48,8 +48,8 @@ def auth(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) -> None:
 
 @app.get("/health")
 async def health() -> dict:
-    loaded = await asyncio.to_thread(vlm.loaded)
-    return {"ok": True, "model": vlm.MODEL, "model_loaded": loaded}
+    problem = await asyncio.to_thread(vlm.problem)
+    return {"ok": True, "model": vlm.MODEL, "model_loaded": problem is None} | ({"error": problem} if problem else {})
 
 
 @app.post("/v1/read", dependencies=[Depends(auth)])
@@ -65,7 +65,7 @@ async def read(files: list[UploadFile] = File(...)) -> dict:
     async with SLOTS:
         try:
             out = await asyncio.to_thread(read_document, pages)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, vlm.OutOfTokens) as e:
             raise HTTPException(503, f"vision model unavailable: {e}") from None
     out["model"] = f"local ({vlm.MODEL})"
     return out
