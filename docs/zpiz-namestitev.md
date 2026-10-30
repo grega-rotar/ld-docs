@@ -15,7 +15,7 @@ Dva vsebnika na enem Linux VM, ki ju zažene `docker compose`:
  referenti (brskalnik)                        VM pri ZPIZ                         OpenShift AI (ZPIZ)
  ┌──────────────┐  HTTPS   ┌──────────┐ HTTP  ┌─────────────────────────────┐
  │ brskalnik    │ ───────▶ │ reverse  │ ────▶ │ api     :8080 (-> 8000)     │
- └──────────────┘          │ proxy    │       │   │ http://reader:8100      │
+ └──────────────┘          │ proxy    │       │   │ http://127.0.0.1:8100   │
                            │ (TLS)    │       │   ▼                         │  HTTPS  ┌───────────────────┐
                            └──────────┘       │ reader  (brez vrat navzven) │ ──────▶ │ vLLM, Qwen3.6     │
                                               │ volume ld_data (/data)      │         │ .../v1            │
@@ -108,14 +108,16 @@ Ena datoteka `.env` poleg `compose.yml`. Compose da vsakemu vsebniku samo spreme
 | `VLM_API` | `openai` | `openai` = strežnik z API-jem, združljivim z OpenAI (vLLM, OpenShift AI MaaS) |
 | `VLM_URL` | (obvezno) | osnovni URL modela, konča se z `/v1`, npr. `https://<model-route>.apps.<cluster>.<domain>/v1`. Tudi oblika MaaS (`…/<projekt>/<model>/v1`) je samo drug `VLM_URL`. |
 | `VLM_KEY` | (obvezno) | žeton service accounta ali ključ MaaS; pošlje se kot `Authorization: Bearer …` |
-| `VLM_MODEL` | `redhataiqwen36-35b-a3b` | ime modela, kot ga vrne `GET {VLM_URL}/models` |
+| `VLM_MODEL` | `qwen3.6/redhataiqwen36-35b-a3b` | ime modela, kot ga vrne `GET {VLM_URL}/models` (pri Bifrostu s predpono, npr. `qwen3.6/…`) |
 | `VLM_VERIFY_TLS` | `0` | `0` = certifikat gruče se ne preverja, certifikati na VM niso potrebni (ob zagonu se izpiše opozorilo); `1` = preverja se s sistemskimi CA |
 | `VLM_TIMEOUT` | `120` | sekunde čakanja na en odgovor modela |
 | `JOB_TTL_DAYS` | `7` | po koliko dneh se rezultati paketa izbrišejo |
 | `LOCAL_PARALLEL` | `3` | koliko dokumentov paketa API hkrati pošlje bralniku |
 | `READER_PARALLEL` | `2` | koliko dokumentov bralnik bere hkrati (okrog 1 na vCPU) |
 
-`READERS=local` in `READER_URL=http://reader:8100` sta zapisana v `compose.yml` in se ne spreminjata.
+`READERS=local` in `READER_URL=http://127.0.0.1:8100` sta zapisana v `compose.yml` in se ne spreminjata. Bralnik
+deli omrežje z vsebnikom `api` (`network_mode: service:api`), zato DNS med vsebniki ni potreben (Podman z
+omrežjem cni ga nima).
 
 ### Ključi
 
@@ -180,7 +182,7 @@ exp=$(echo "$p" | base64 -d | grep -o '"exp":[0-9]*' | cut -d: -f2); date -d "@$
 
 ```bash
 curl -s http://127.0.0.1:8080/health
-# {"ok": true, "reader": "local", "readers": ["local"], "local": {"ok": true, "model": "redhataiqwen36-35b-a3b"}}
+# {"ok": true, "reader": "local", "readers": ["local"], "local": {"ok": true, "model": "qwen3.6/redhataiqwen36-35b-a3b"}}
 ```
 
 - `ok`: API teče.
@@ -259,7 +261,7 @@ docker compose up -d            # brez "pull": slike so že lokalno
 - `.env` nikoli ne dajte v git ali v zahtevke za podporo. Pri pošiljanju dnevnikov preverite,
   da v njih ni ključev.
 - Pred API mora biti TLS (reverse proxy); vrata 8080 naj bodo dosegljiva samo s proxyja.
-- Bralnik nima objavljenih vrat; doseže ga samo `api` v omrežju compose, z `READER_KEY`.
+- Bralnik nima objavljenih vrat; deli omrežje z vsebnikom `api` in ga doseže samo ta, z `READER_KEY`.
 
 ## Preverjanje natančnosti pred začetkom dela
 
@@ -285,6 +287,9 @@ samo označenih. Skeni in rezultati vsebujejo osebne podatke: po preverjanju izb
 
 ## Težave
 
+Najprej v mapi s `compose.yml` in `.env` zaženite `bash diagnose.sh`: po korakih preveri `.env`, vsebnika,
+povezavo API -> bralnik, bralnik -> model in `/health`, ključev ne izpiše. Popravite prvi `FAIL` od zgoraj.
+
 | Kaj vidite | Vzrok | Kaj storiti |
 |---|---|---|
 | Glava strani: »Bralnik ne deluje«, `/health` `local.ok: false` | bralnik ne teče ali ne doseže modela | `docker compose ps`, `docker compose logs reader`; preverite model z VM (zgoraj). Dokumenti v vrsti se preberejo, ko bralnik spet deluje (»Poskusi znova«). |
@@ -293,6 +298,7 @@ samo označenih. Skeni in rezultati vsebujejo osebne podatke: po preverjanju izb
 | `503` ali dokumenti s stanjem napake »vision model unavailable« | model na gruči ne odgovarja (5xx, ni zagnan, preobremenjen) | stanje modela v OpenShift AI; dokumente naložite znova, ko deluje |
 | `503` na vse klice API-ja | `API_KEYS` prazen | vpišite ključe |
 | Vse je delovalo, nato `401` od modela | žeton je potekel | glejte »Kdaj poteče žeton« |
+| Po spremembi `.env` »Bralnik ne deluje«, bralnik pa teče | vsebnik `api` je bil ponovno ustvarjen, bralnik je ostal v starem omrežju | `docker compose up -d --force-recreate` |
 | Branje je počasno | malo CPU, model zaseden, premalo hkratnih dokumentov | `docker stats`; več vCPU in `READER_PARALLEL`/`LOCAL_PARALLEL`; čas odgovora modela preverite s klicem s sliko (zgoraj) |
 | `docker compose` javi `required variable … is missing a value` | obvezna spremenljivka manjka v `.env` | vpišite jo (`API_KEYS`, `READER_KEY`, `VLM_URL`, `VLM_KEY`) |
 | Nalaganje velikega paketa se prekine (`413`) | omejitev reverse proxyja | `client_max_body_size` v nginx |

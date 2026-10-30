@@ -76,7 +76,7 @@ host = urllib.parse.urlsplit(url).hostname or "reader"
 try:
     print(f"  OK    name '{host}' -> {socket.gethostbyname(host)}")
 except Exception as e:
-    print(f"  FAIL  name '{host}' does not resolve ({e}): the reader is not running, or the network has no DNS")
+    print(f"  FAIL  name '{host}' does not resolve ({e}): the reader is not running, or the network has no DNS; the current compose.yml needs none")
     raise SystemExit(1)
 try:
     with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=15) as r:
@@ -158,7 +158,9 @@ else
 fi
 
 step "6. /health (the whole chain, as the page sees it)"
-port=$(val HTTP_PORT); port=${port:-8080}
+# The port the api is really published on (compose.yml may have been changed), else HTTP_PORT from .env.
+port=$("$ENGINE" port "$API" 8000 2>/dev/null | head -1 | sed 's/.*://')
+[ -n "$port" ] || { port=$(val HTTP_PORT); port=${port:-8080}; }
 health_url="http://127.0.0.1:$port/health"
 if command -v curl >/dev/null; then health=$(curl -s -m 15 "$health_url")
 else health=$(python3 -c "import urllib.request; print(urllib.request.urlopen('$health_url', timeout=15).read().decode())" 2>&1); fi

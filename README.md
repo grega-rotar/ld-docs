@@ -36,7 +36,7 @@ The images are public on GitHub: [ld-docs](https://github.com/grega-rotar/ld-doc
 | `READER_KEY` | a key between the two containers; `openssl rand -hex 32` |
 | `VLM_URL` | the model's address, ending in `/v1` |
 | `VLM_KEY` | the model's token |
-| `VLM_MODEL` | the model's name, e.g. `redhataiqwen36-35b-a3b` |
+| `VLM_MODEL` | the model's name, as `GET {VLM_URL}/models` lists it, e.g. `qwen3.6/redhataiqwen36-35b-a3b` |
 
 No certificates are needed: the page is plain HTTP and the cluster's certificate isn't checked. The other settings
 have sensible defaults; `.env` explains each one. After a change: `docker compose up -d`.
