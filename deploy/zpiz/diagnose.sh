@@ -152,6 +152,26 @@ answer = call("/chat/completions", {
     "messages": [{"role": "user", "content": "Answer with only the word OK."}]}, timeout=120)
 text = (answer.get("choices") or [{}])[0].get("message", {}).get("content")
 print(f"  OK    model answers in {time.time() - t:.1f} s: {text!r}")
+
+# The reader sends the model crops of handwriting, not text: the same kind of call, with an image of "SEK".
+import base64, io
+from PIL import Image, ImageDraw
+im = Image.new("RGB", (200, 70), "white")
+ImageDraw.Draw(im).text((20, 15), "SEK", fill="black", font_size=36)
+buf = io.BytesIO()
+im.save(buf, "PNG")
+t = time.time()
+answer = call("/chat/completions", {
+    "model": model, "temperature": 0, "max_tokens": 16, "chat_template_kwargs": {"enable_thinking": False},
+    "messages": [{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()}},
+        {"type": "text", "text": "Transcribe the text. Answer with only the text."}]}]},
+    timeout=int(os.environ.get("VLM_TIMEOUT", "120")))
+text = (answer.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+if "SEK" in text.upper():
+    print(f"  OK    model reads an image in {time.time() - t:.1f} s: {text!r}")
+else:
+    fail(f"model got an image of 'SEK' and answered {text!r} (does this route pass images to a vision model?)")
 PY
 else
   bad "skipped: the reader container is not running"
