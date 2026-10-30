@@ -178,7 +178,7 @@ else
 fi
 
 step "6. /health (the whole chain, as the page sees it)"
-# The port the api is really published on (compose.yml may have been changed), else HTTP_PORT from .env.
+# The port the api is published on (an older compose.yml), else HTTP_PORT: with the host network it listens there.
 port=$("$ENGINE" port "$API" 8000 2>/dev/null | head -1 | sed 's/.*://')
 [ -n "$port" ] || { port=$(val HTTP_PORT); port=${port:-8080}; }
 health_url="http://127.0.0.1:$port/health"

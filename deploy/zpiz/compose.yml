@@ -1,7 +1,8 @@
 # ld-docs on ZPIZ's own VM (docs/zpiz-namestitev.md). Start: docker compose up -d in this directory.
 # Needs .env next to this file (copy .env.example, mode 600). Two containers: `api` (the upload page and /v1)
-# and `reader` (OpenCV + Tesseract on the CPU, no GPU). The reader shares the api's network, so the api reaches it
-# at 127.0.0.1 without container DNS (Podman with the cni backend has none). The reader sends one small crop per
+# and `reader` (OpenCV + Tesseract on the CPU, no GPU). Both use the VM's own network (network_mode: host): no
+# container network or DNS (Podman with the cni backend has none), and the VM's DNS and firewall apply. The api
+# listens on HTTP_BIND:HTTP_PORT, the reader only on 127.0.0.1:READER_PORT. The reader sends one small crop per
 # handwritten field to the vision model on OpenShift AI (VLM_URL); nothing else leaves the VM.
 name: ld-docs
 
@@ -16,20 +17,20 @@ services:
   api:
     image: ghcr.io/grega-rotar/ld-docs:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    # The only published port. HTTP_BIND=127.0.0.1 when a reverse proxy on this VM does TLS.
-    ports:
-      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:8000"
+    network_mode: host
+    # The only port open to others. HTTP_BIND=127.0.0.1 when a reverse proxy on this VM does TLS.
+    command: ["python3", "-m", "uvicorn", "app.main:app", "--host", "${HTTP_BIND:-0.0.0.0}", "--port", "${HTTP_PORT:-8080}"]
     environment:
       API_KEYS: ${API_KEYS:?set API_KEYS in .env}
       READERS: local  # only the local reader: Claude is never started
-      READER_URL: http://127.0.0.1:8100  # the reader shares this container's network
+      READER_URL: http://127.0.0.1:${READER_PORT:-8100}
       READER_KEY: ${READER_KEY:?set READER_KEY in .env}
       JOB_TTL_DAYS: ${JOB_TTL_DAYS:-7}
       LOCAL_PARALLEL: ${LOCAL_PARALLEL:-3}
     volumes:
       - ld_data:/data  # job files (results and corrections), deleted after JOB_TTL_DAYS
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${HTTP_PORT:-8080}/health')"]
       interval: 30s
       timeout: 5s
       start_period: 10s
@@ -39,11 +40,10 @@ services:
   reader:
     image: ghcr.io/grega-rotar/ld-reader:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    # In the api's network namespace: the api reaches it at 127.0.0.1:8100, and it has no port of its own
-    # outside. Started after the api; with the reader down the page shows "Bralnik ne deluje".
-    network_mode: service:api
-    depends_on:
-      - api
+    network_mode: host
+    # Only on 127.0.0.1: the api reaches it, nothing outside the VM does. With the reader down the page
+    # shows "Bralnik ne deluje".
+    command: ["python", "-m", "uvicorn", "reader.server:app", "--host", "127.0.0.1", "--port", "${READER_PORT:-8100}"]
     environment:
       READER_KEYS: ${READER_KEY:?set READER_KEY in .env}  # the same key the api sends
       READER_PARALLEL: ${READER_PARALLEL:-2}
@@ -57,7 +57,7 @@ services:
       VLM_TIMEOUT: ${VLM_TIMEOUT:-120}
     healthcheck:
       # /health also asks the vision model for its model list, so it gets more time than the api's.
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=10)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${READER_PORT:-8100}/health', timeout=10)"]
       interval: 30s
       timeout: 15s
       start_period: 20s

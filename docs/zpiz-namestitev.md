@@ -14,10 +14,10 @@ Dva vsebnika na enem Linux VM, ki ju zažene `docker compose`:
 ```
  referenti (brskalnik)                        VM pri ZPIZ                         OpenShift AI (ZPIZ)
  ┌──────────────┐  HTTPS   ┌──────────┐ HTTP  ┌─────────────────────────────┐
- │ brskalnik    │ ───────▶ │ reverse  │ ────▶ │ api     :8080 (-> 8000)     │
+ │ brskalnik    │ ───────▶ │ reverse  │ ────▶ │ api     :8080               │
  └──────────────┘          │ proxy    │       │   │ http://127.0.0.1:8100   │
                            │ (TLS)    │       │   ▼                         │  HTTPS  ┌───────────────────┐
-                           └──────────┘       │ reader  (brez vrat navzven) │ ──────▶ │ vLLM, Qwen3.6     │
+                           └──────────┘       │ reader  127.0.0.1:8100      │ ──────▶ │ vLLM, Qwen3.6     │
                                               │ volume ld_data (/data)      │         │ .../v1            │
                                               └─────────────────────────────┘         └───────────────────┘
 ```
@@ -49,7 +49,11 @@ okrog 15 s, paket 51 dokumentov nekaj minut. Več hkratnih dokumentov: `READER_P
 
 API sam govori samo HTTP. Ključi za dostop gredo v glavi `Authorization`, zato naj bo pred njim reverse proxy
 ZPIZ s TLS. Če proxy teče na istem VM, nastavite `HTTP_BIND=127.0.0.1`, da vrata 8080 niso dosegljiva od
-drugod (Docker objavljena vrata odpre mimo `firewalld`/`ufw`).
+drugod.
+
+Vsebnika uporabljata omrežje VM (`network_mode: host`), zato velja požarni zid VM. Da referenti dosežejo
+stran, odprite `HTTP_PORT`, npr. `sudo firewall-cmd --add-port=8080/tcp --permanent && sudo firewall-cmd --reload`.
+Bralnik posluša samo na `127.0.0.1:8100` (`READER_PORT`) in od drugod ni dosegljiv.
 
 Primer za nginx (nalaganje paketa je lahko nekaj sto MB, en dokument v `/v1/extract` se bere do nekaj minut):
 
@@ -103,6 +107,7 @@ Ena datoteka `.env` poleg `compose.yml`. Compose da vsakemu vsebniku samo spreme
 | `IMAGE_TAG` | `latest` | različica obeh slik, git sha (npr. `633879a…`). Za produkcijo vpišite sha, ne `latest`. |
 | `HTTP_BIND` | `0.0.0.0` | naslov na VM, kjer posluša API; `127.0.0.1`, če je proxy na istem VM |
 | `HTTP_PORT` | `8080` | vrata na VM |
+| `READER_PORT` | `8100` | vrata bralnika, samo na `127.0.0.1`; spremenite, če so zasedena |
 | `API_KEYS` | (obvezno) | ključi za dostop, ločeni z vejico, eden na odjemalca (referenti, drug sistem …) |
 | `READER_KEY` | (obvezno) | ključ med API in bralnikom; compose ga da obema (bralniku kot `READER_KEYS`) |
 | `VLM_API` | `openai` | `openai` = strežnik z API-jem, združljivim z OpenAI (vLLM, OpenShift AI MaaS) |
@@ -115,9 +120,9 @@ Ena datoteka `.env` poleg `compose.yml`. Compose da vsakemu vsebniku samo spreme
 | `LOCAL_PARALLEL` | `3` | koliko dokumentov paketa API hkrati pošlje bralniku |
 | `READER_PARALLEL` | `2` | koliko dokumentov bralnik bere hkrati (okrog 1 na vCPU) |
 
-`READERS=local` in `READER_URL=http://127.0.0.1:8100` sta zapisana v `compose.yml` in se ne spreminjata. Bralnik
-deli omrežje z vsebnikom `api` (`network_mode: service:api`), zato DNS med vsebniki ni potreben (Podman z
-omrežjem cni ga nima).
+`READERS=local` in `READER_URL=http://127.0.0.1:<READER_PORT>` sta zapisana v `compose.yml`. Vsebnika
+uporabljata omrežje VM (`network_mode: host`), zato DNS med vsebniki ni potreben (Podman z omrežjem cni ga
+nima), za `VLM_URL` pa velja DNS VM.
 
 ### Ključi
 
@@ -261,7 +266,7 @@ docker compose up -d            # brez "pull": slike so že lokalno
 - `.env` nikoli ne dajte v git ali v zahtevke za podporo. Pri pošiljanju dnevnikov preverite,
   da v njih ni ključev.
 - Pred API mora biti TLS (reverse proxy); vrata 8080 naj bodo dosegljiva samo s proxyja.
-- Bralnik nima objavljenih vrat; deli omrežje z vsebnikom `api` in ga doseže samo ta, z `READER_KEY`.
+- Bralnik posluša samo na `127.0.0.1` VM; doseže ga samo `api`, z `READER_KEY`.
 
 ## Preverjanje natančnosti pred začetkom dela
 
@@ -298,7 +303,8 @@ povezavo API -> bralnik, bralnik -> model in `/health`, ključev ne izpiše. Pop
 | `503` ali dokumenti s stanjem napake »vision model unavailable« | model na gruči ne odgovarja (5xx, ni zagnan, preobremenjen) | stanje modela v OpenShift AI; dokumente naložite znova, ko deluje |
 | `503` na vse klice API-ja | `API_KEYS` prazen | vpišite ključe |
 | Vse je delovalo, nato `401` od modela | žeton je potekel | glejte »Kdaj poteče žeton« |
-| Po spremembi `.env` »Bralnik ne deluje«, bralnik pa teče | vsebnik `api` je bil ponovno ustvarjen, bralnik je ostal v starem omrežju | `docker compose up -d --force-recreate` |
+| Stran se na VM odpre (`curl http://127.0.0.1:8080/health`), od drugod pa ne | požarni zid VM | odprite `HTTP_PORT` (glejte »Omrežje in TLS«) |
+| Vsebnik se ne zažene, v dnevniku `address already in use` | vrata `HTTP_PORT` ali `READER_PORT` na VM že uporablja drug program | v `.env` izberite prosta vrata, `docker compose up -d` |
 | Branje je počasno | malo CPU, model zaseden, premalo hkratnih dokumentov | `docker stats`; več vCPU in `READER_PARALLEL`/`LOCAL_PARALLEL`; čas odgovora modela preverite s klicem s sliko (zgoraj) |
 | `docker compose` javi `required variable … is missing a value` | obvezna spremenljivka manjka v `.env` | vpišite jo (`API_KEYS`, `READER_KEY`, `VLM_URL`, `VLM_KEY`) |
 | Nalaganje velikega paketa se prekine (`413`) | omejitev reverse proxyja | `client_max_body_size` v nginx |

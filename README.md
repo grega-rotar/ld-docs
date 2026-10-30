@@ -23,7 +23,9 @@ docker compose up -d     # downloads the images and starts them
 curl -s http://127.0.0.1:8080/health    # "local": {"ok": true, …} means it can read
 ```
 
-Then open `http://<vm>:8080` and sign in with one of the `API_KEYS`.
+Both containers use the VM's own network, so open the port in its firewall
+(`sudo firewall-cmd --add-port=8080/tcp --permanent && sudo firewall-cmd --reload`). Then open `http://<vm>:8080`
+and sign in with one of the `API_KEYS`.
 
 The images are public on GitHub: [ld-docs](https://github.com/grega-rotar/ld-docs/pkgs/container/ld-docs) and
 [ld-reader](https://github.com/grega-rotar/ld-docs/pkgs/container/ld-reader).
