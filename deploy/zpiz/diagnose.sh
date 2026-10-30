@@ -102,7 +102,7 @@ fi
 step "5. reader -> vision model (from inside the reader container, with its own settings)"
 if running "$READER"; then
   "$ENGINE" exec -i "$READER" python - <<'PY' || FAILED=1
-import json, os, socket, ssl, time, urllib.error, urllib.parse, urllib.request
+import json, os, re, socket, ssl, time, urllib.error, urllib.parse, urllib.request
 url = os.environ.get("VLM_URL", "").rstrip("/")
 key = os.environ.get("VLM_KEY", "")
 model = os.environ.get("VLM_MODEL", "")
@@ -146,12 +146,26 @@ if model in ids:
 else:
     fail(f"key works, but model {model} is not listed; listed: {ids}")
 
+# The reader's budgets plus VLM_THINKING_TOKENS, for a model that thinks before it answers.
+extra = int(os.environ.get("VLM_THINKING_TOKENS", "0") or 0)
+vlm_timeout = int(os.environ.get("VLM_TIMEOUT", "120"))
+
+def answer_of(answer):
+    choice = (answer.get("choices") or [{}])[0]
+    text = re.sub(r"<think>.*?</think>", "", choice.get("message", {}).get("content") or "", flags=re.S)
+    used = (answer.get("usage") or {}).get("completion_tokens")
+    if choice.get("finish_reason") == "length" and (not text.strip() or "<think>" in text):
+        fail(f"the model was still thinking after {used} tokens; raise VLM_THINKING_TOKENS in .env (now {extra})")
+    return text.split("</think>")[-1].strip(), used
+
 t = time.time()
-answer = call("/chat/completions", {
-    "model": model, "temperature": 0, "max_tokens": 8, "chat_template_kwargs": {"enable_thinking": False},
-    "messages": [{"role": "user", "content": "Answer with only the word OK."}]}, timeout=120)
-text = (answer.get("choices") or [{}])[0].get("message", {}).get("content")
-print(f"  OK    model answers in {time.time() - t:.1f} s: {text!r}")
+text, used = answer_of(call("/chat/completions", {
+    "model": model, "temperature": 0, "max_tokens": 8 + extra, "chat_template_kwargs": {"enable_thinking": False},
+    "messages": [{"role": "user", "content": "Answer with only the word OK."}]}, timeout=vlm_timeout))
+print(f"  OK    model answers in {time.time() - t:.1f} s, {used} tokens: {text!r}")
+if used and used > 20:
+    print(f"        the model thinks before it answers ({used} tokens for one word): reading is slow, and")
+    print(f"        VLM_THINKING_TOKENS (now {extra}) must cover it. Faster: have thinking turned off on the model server.")
 
 # The reader sends the model crops of handwriting, not text: the same kind of call, with an image of "SEK".
 import base64, io
@@ -161,15 +175,13 @@ ImageDraw.Draw(im).text((20, 15), "SEK", fill="black", font_size=36)
 buf = io.BytesIO()
 im.save(buf, "PNG")
 t = time.time()
-answer = call("/chat/completions", {
-    "model": model, "temperature": 0, "max_tokens": 16, "chat_template_kwargs": {"enable_thinking": False},
+text, used = answer_of(call("/chat/completions", {
+    "model": model, "temperature": 0, "max_tokens": 40 + extra, "chat_template_kwargs": {"enable_thinking": False},
     "messages": [{"role": "user", "content": [
         {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()}},
-        {"type": "text", "text": "Transcribe the text. Answer with only the text."}]}]},
-    timeout=int(os.environ.get("VLM_TIMEOUT", "120")))
-text = (answer.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        {"type": "text", "text": "Transcribe the text. Answer with only the text."}]}]}, timeout=vlm_timeout))
 if "SEK" in text.upper():
-    print(f"  OK    model reads an image in {time.time() - t:.1f} s: {text!r}")
+    print(f"  OK    model reads an image in {time.time() - t:.1f} s, {used} tokens: {text!r}")
 else:
     fail(f"model got an image of 'SEK' and answered {text!r} (does this route pass images to a vision model?)")
 PY

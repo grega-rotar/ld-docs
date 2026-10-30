@@ -27,6 +27,8 @@ services:
       READER_KEY: ${READER_KEY:?set READER_KEY in .env}
       JOB_TTL_DAYS: ${JOB_TTL_DAYS:-7}
       LOCAL_PARALLEL: ${LOCAL_PARALLEL:-3}
+      # Seconds the api waits for one document. A model that thinks before each field takes minutes.
+      READER_TIMEOUT: ${READER_TIMEOUT:-900}
     volumes:
       - ld_data:/data  # job files (results and corrections), deleted after JOB_TTL_DAYS
     healthcheck:
@@ -54,7 +56,10 @@ services:
       # The cluster's certificate is not checked, so no CA files are needed on the VM. 1 = check it
       # against the system CAs.
       VLM_VERIFY_TLS: ${VLM_VERIFY_TLS:-0}
-      VLM_TIMEOUT: ${VLM_TIMEOUT:-120}
+      VLM_TIMEOUT: ${VLM_TIMEOUT:-300}
+      # Qwen3.6 behind Bifrost thinks before it answers (Bifrost drops "enable_thinking": false): tokens it may
+      # think on top of each answer. 0 when thinking is turned off on the model server (much faster).
+      VLM_THINKING_TOKENS: ${VLM_THINKING_TOKENS:-8000}
     healthcheck:
       # /health also asks the vision model for its model list, so it gets more time than the api's.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${READER_PORT:-8100}/health', timeout=10)"]

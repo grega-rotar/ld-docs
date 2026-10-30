@@ -8,6 +8,35 @@ It runs on one Linux VM as two Docker containers, `api` (web page and API) and `
 the reader asks Qwen3.6 on ZPIZ's OpenShift AI, sending only small crops of the handwritten fields. Scans never
 leave the VM.
 
+## Update a running install (ZPIZ, now)
+
+In the folder with `compose.yml` and `.env` (`docker` or `podman`, the same commands):
+
+```bash
+cp compose.yml compose.yml.old       # keep your old one to compare
+curl -fsSLO https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/compose.yml
+curl -fsSLO https://raw.githubusercontent.com/grega-rotar/ld-docs/main/deploy/zpiz/diagnose.sh
+vi .env                              # check the lines below
+docker compose pull                  # the newest images (IMAGE_TAG=latest)
+docker compose down && docker compose up -d    # down without -v: results are kept
+bash diagnose.sh                     # every step must say OK
+```
+
+In `.env`:
+
+```bash
+IMAGE_TAG=latest
+HTTP_PORT=8051                            # the port clerks open; open it in the firewall too:
+                                          # sudo firewall-cmd --add-port=8051/tcp --permanent && sudo firewall-cmd --reload
+VLM_MODEL=qwen3.6/redhataiqwen36-35b-a3b  # exactly as Bifrost lists it
+VLM_THINKING_TOKENS=8000                  # the model thinks before it answers; raise if documents say "still thinking"
+VLM_TIMEOUT=300
+READER_TIMEOUT=900
+```
+
+Both containers now use the VM's own network (no container DNS needed); the reader listens only on
+`127.0.0.1:8100` (`READER_PORT`). If the page says "Bralnik ne deluje", the banner now also says why.
+
 ## Install
 
 You need a Linux VM with Docker (2–4 vCPU, 4 GB RAM), network access from it to the model on OpenShift AI, and the

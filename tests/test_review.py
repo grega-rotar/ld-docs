@@ -1,9 +1,11 @@
 """READERS (local only at ZPIZ), the reader's health in /health, and the clerk's review + export of a batch."""
+import asyncio
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -95,15 +97,40 @@ def test_health_local(client, local_only, monkeypatch):
     assert client.get("/health").json()["local"]["ok"] is True and calls == []  # cached for 15 s
 
     monkeypatch.setattr(ex, "_reader_health", {})
-    monkeypatch.setattr(ex.httpx, "get", lambda url, **kw: httpx.Response(200, json={"ok": True, "model_loaded": False, "model": "m"}))
-    assert client.get("/health").json()["local"] == {"ok": False, "model": "m"}  # up, but the model isn't loaded
+    monkeypatch.setattr(ex.httpx, "get", lambda url, **kw: httpx.Response(200, json={"ok": True, "model_loaded": False, "model": "m", "error": "VLM_MODEL m is not among the server's models ['x']"}))
+    assert client.get("/health").json()["local"] == {"ok": False, "model": "m", "error": "VLM_MODEL m is not among the server's models ['x']"}  # up, but the model isn't there
 
 
 def test_health_reader_unreachable(client, monkeypatch):
     monkeypatch.setattr(ex, "READERS", [ex.LOCAL])
     monkeypatch.setattr(ex, "READER_URL", "http://127.0.0.1:9")  # nothing listens there
     r = client.get("/health")
-    assert r.status_code == 200 and r.json()["local"] == {"ok": False, "model": None}
+    assert r.status_code == 200 and r.json()["local"] == {"ok": False, "model": None, "error": "reader unreachable at http://127.0.0.1:9 (ConnectError)"}
+
+
+def test_a_reader_timeout_is_not_retried(monkeypatch):
+    """The reader is still reading: asking again would only queue a second copy behind the first."""
+    calls = []
+
+    class Client:
+        def __init__(self, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            pass
+
+        async def post(self, url, **kw):
+            calls.append(url)
+            raise httpx.ReadTimeout("slow")
+
+    monkeypatch.setattr(ex.httpx, "AsyncClient", Client)
+    monkeypatch.setattr(ex, "READER_TIMEOUT", 900)
+    with pytest.raises(ex.ExtractError, match="within 900 s") as e:
+        asyncio.run(ex.run_local(SimpleNamespace(pages=[])))
+    assert len(calls) == 1 and not e.value.exhausted
 
 
 def test_health_without_local_has_no_local(client):

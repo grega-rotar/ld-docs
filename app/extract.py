@@ -23,6 +23,8 @@ MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
 TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "300"))
 READER_URL = os.environ.get("READER_URL", "").rstrip("/")
 READER_KEY = os.environ.get("READER_KEY", "")
+# One document through the local reader. A vision model that thinks before each field can take minutes.
+READER_TIMEOUT = int(os.environ.get("READER_TIMEOUT", "900"))
 PROMPT = (Path(__file__).parent / "prompt.md").read_text()
 IMAGE_MAX_SIDE = 2000
 EXIT_EXHAUSTED = 75  # claude-pool: every account is at its usage limit
@@ -88,16 +90,19 @@ _reader_health: dict[str, tuple[float, dict]] = {}  # READER_URL -> (checked at,
 
 
 def reader_health() -> dict:
-    """{"ok", "model"} from the local reader's /health, cached so GET /health stays fast. Never raises."""
+    """{"ok", "model"} from the local reader's /health, plus "error" (why not) when not ok. Cached so GET /health
+    stays fast. Never raises."""
     hit = _reader_health.get(READER_URL)
     if hit and time.monotonic() - hit[0] < HEALTH_TTL:
         return hit[1]
     try:
-        r = httpx.get(f"{READER_URL}/health", timeout=3)
+        r = httpx.get(f"{READER_URL}/health", timeout=10)  # the reader asks the model server, up to 5 s
         body = r.json() if r.status_code == 200 else {}
         out = {"ok": body.get("model_loaded") is True, "model": body.get("model")}
-    except Exception:  # unreachable, too slow or not JSON: either way the reader can't read now
-        out = {"ok": False, "model": None}
+        if not out["ok"]:
+            out["error"] = body.get("error") or f"reader answered {r.status_code}"
+    except Exception as e:  # unreachable, too slow or not JSON: either way the reader can't read now
+        out = {"ok": False, "model": None, "error": f"reader unreachable at {READER_URL} ({type(e).__name__})"}
     _reader_health[READER_URL] = (time.monotonic(), out)
     return out
 
@@ -246,13 +251,15 @@ async def run_local(doc: Document, progress=no_progress) -> dict:
     last = None
     for attempt in range(2):  # one retry: the tunnel or the laptop can blink
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT, connect=15)) as c:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(READER_TIMEOUT, connect=15)) as c:
                 r = await c.post(f"{READER_URL}/v1/read", files=files, headers={"Authorization": f"Bearer {READER_KEY}"})
             if r.status_code == 200:
                 return r.json()
             last = f"reader answered {r.status_code}: {r.text[:300]}"
             if r.status_code < 500:
                 break
+        except httpx.ReadTimeout:  # the reader is still at it: asking again would only queue a second copy
+            raise ExtractError(f"the reader did not finish within {READER_TIMEOUT} s (slow vision model? READER_TIMEOUT)") from None
         except httpx.HTTPError as e:
             last = f"reader unreachable ({type(e).__name__}: {e})"
         if attempt == 0:
