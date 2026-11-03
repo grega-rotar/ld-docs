@@ -1,16 +1,11 @@
-# check -> image -> deploy, like rokomet-stats. See README.md, "Deploy".
-# Rollback: run by hand with `tag` = an older sha; that skips check and image.
-name: deploy
+# check -> image. Nothing deploys from here: the t4a server no longer hosts this app.
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Deploy this existing image tag (git sha) instead of building"
-        required: false
 
 env:
   IMAGE: ghcr.io/grega-rotar/ld-docs
@@ -19,7 +14,6 @@ env:
 
 jobs:
   check:
-    if: ${{ !inputs.tag }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,7 +26,6 @@ jobs:
   # The local reader (reader/) runs on the GPU machine, not here; its tests use synthetic forms and stub
   # out the vision model, so they run on a plain runner inside the reader image.
   reader:
-    if: ${{ !inputs.tag }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +35,7 @@ jobs:
             "pip install -q --user -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests/reader"
 
   image:
-    if: ${{ github.event_name != 'pull_request' && !inputs.tag }}
+    if: ${{ github.event_name != 'pull_request' }}
     needs: [check, reader]
     runs-on: ubuntu-latest
     permissions:
@@ -77,32 +70,3 @@ jobs:
             ${{ env.READER_IMAGE }}:latest
           cache-from: type=gha,scope=reader
           cache-to: type=gha,mode=max,scope=reader
-
-  deploy:
-    if: ${{ github.event_name != 'pull_request' && !cancelled() && !failure() }}
-    needs: image
-    runs-on: ubuntu-latest
-    concurrency: deploy-ld-docs
-    env:
-      TAG: ${{ inputs.tag || github.sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: SSH key
-        run: |
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519
-      - name: Copy compose.yml
-        run: scp infra/compose.yml deploy@${{ secrets.DEPLOY_HOST }}:/srv/ld-docs/
-      - name: Pull and restart
-        run: |
-          ssh deploy@${{ secrets.DEPLOY_HOST }} "cd /srv/ld-docs && export IMAGE_TAG=$TAG && docker compose pull app && docker compose up -d --remove-orphans"
-      - name: Wait for /health
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS --max-time 5 "$HEALTH_URL"; then exit 0; fi
-            sleep 2
-          done
-          echo "$HEALTH_URL did not return 200 within 60 s"
-          exit 1
