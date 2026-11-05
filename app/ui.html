@@ -158,6 +158,7 @@ body.working .work { display: grid; }
 .item > span:first-child { min-width: 0; }
 .item .case { display: block; font: 500 13.5px var(--mono); }
 .item .pages { display: block; font: 11.5px var(--mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.item .time { display: block; font: 11px var(--mono); color: var(--ink-2); white-space: nowrap; }
 .item.flash { animation: flash .9s var(--ease); }
 @keyframes flash { 0% { background: var(--pen-soft); } 100% { background: transparent; } }
 .tag { font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -662,6 +663,7 @@ async function api(path, opts = {}) {
 
 /* ---------- state ---------- */
 let docs = [], rejected = [], jobId = null, jobLabel = "", jobStatus = "", sel = 0, filter = "all";
+let jobT = {};  // created_at / finished_at of the job, for the total time
 let running = false, session = 0, phase = "read", up = { sent: 0, total: 0 }, splitting = { done: 0, total: 0 }, parallel = 6, follow = true;
 const sources = new Map();   // page name (as the API reports it) -> () => Promise<blob url | null>
 const rendered = new Map();
@@ -829,6 +831,7 @@ const INTERRUPTED = "Branje je bilo prekinjeno, ker se je strežnik znova zagnal
 function applyJob(job, asked) {
   parallel = job.parallel || parallel;
   jobStatus = job.status;
+  jobT = { from: job.created_at, to: job.finished_at };
   if (job.reader && job.reader !== MODE) setMode(job.reader);
   if (job.status === "error") throw new Error(job.error);
   if (job.status === "splitting") { phase = "split"; splitting = job.split || splitting; return; }
@@ -891,7 +894,9 @@ function render() {
   bar.classList.toggle("live", running);
   bar.firstElementChild.style.width = `${Math.round(pct * 100)}%`;
   const hint = $("qhint");
-  hint.hidden = !(running || before);
+  const avg = avgTimes(s), total = jobT.from && jobT.to ? jobT.to - jobT.from : 0;
+  hint.hidden = !(running || before || Object.keys(avg).length);
+  if (!(running || before)) hint.textContent = [total && `Skupaj ${clock(total)}`, Object.keys(avg).length && `povprečno na dokument: ${timeTxt(avg)}${faster(avg)}`].filter(Boolean).join(" · ");
   if (phase === "upload") hint.textContent = `${mb(up.sent)} / ${mb(up.total)} MB`;
   else if (phase === "split") hint.textContent = `${splitting.done} / ${splitting.total || "…"} strani`;
   else if (running) {
@@ -919,6 +924,37 @@ function render() {
 }
 const mb = b => (b / 1048576).toLocaleString("sl-SI", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
+/* ---------- reading times: each reader's own time per document (usage.duration_ms) ---------- */
+const secs = ms => (ms < 10000 ? (ms / 1000).toLocaleString("sl-SI", { maximumFractionDigits: 1 }) : Math.round(ms / 1000)) + " s";
+function timesOf(d) {
+  const t = {};
+  if (d.status !== "done") return t;
+  for (const r of [d, d.compare && d.compare.result]) {
+    const ms = r && r.usage && r.usage.duration_ms;
+    if (typeof ms === "number") t[/^local/.test(r.model || "") ? "local" : "claude"] = ms;
+  }
+  return t;
+}
+const NAME = { local: "lokalno", claude: "Claude" };
+function timeTxt(t) {
+  const ks = ["local", "claude"].filter(k => k in t);
+  if (ks.length === 1) return secs(t[ks[0]]);
+  return ks.map(k => `${NAME[k]} ${secs(t[k])}`).join(" · ");
+}
+function avgTimes(list) {
+  const sum = {}, n = {};
+  for (const d of list) for (const [k, ms] of Object.entries(timesOf(d))) { sum[k] = (sum[k] || 0) + ms; n[k] = (n[k] || 0) + 1; }
+  const out = {};
+  for (const k in sum) out[k] = sum[k] / n[k];
+  return out;
+}
+function faster(t) {
+  if (!("local" in t && "claude" in t)) return "";
+  const [f, s] = t.local <= t.claude ? ["local", "claude"] : ["claude", "local"];
+  const x = t[s] / Math.max(t[f], 1);
+  return ` · ${f === "local" ? "lokalno" : "Claude"} ${x >= 1.95 ? `${Math.round(x)}× ` : `${secs(t[s] - t[f])} `}hitreje`;
+}
+
 const differs = (d, k) => ((d.compare || {}).differences || []).includes(k);
 const diffCount = d => d.status === "done" ? ((d.compare || {}).differences || []).length : 0;
 function errTag(d) {
@@ -936,11 +972,12 @@ function itemHtml(d, i) {
     : confirmed(d) ? (corrected(d) ? `<span class="tag fix">Popravljeno ${corrected(d)}</span>` : `<span class="tag ok">Potrjeno</span>`)
     : MODE === "both" && diffCount(d) ? `<span class="tag diff">${diffCount(d)} ${plural(diffCount(d), "razlika", "razliki", "razlike", "razlik")}</span>`
     : n ? `<span class="tag check">${n} za preverbo</span>` : `<span class="tag todo">za potrditev</span>`;
+  const tt = timeTxt(timesOf(d));
   const pages = (d.pages || []).map(p => p.replace(/\.(tiff?|png|jpe?g|pdf)$/i, ""));
   const pagesTxt = pages.length === 2 && /^\d+$/.test(pages[0]) && /^\d+$/.test(pages[1]) && pages[0].length === pages[1].length
     ? `${pages[0]}–${pages[1].slice(-2)}` : (d.pages || []).join(", ");
   return `<button class="item ${i === sel ? "sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}">
-    <span><span class="case">${esc(d.case_number || "—")}</span><span class="pages">${esc(pagesTxt)}</span></span>${tag}</button>`;
+    <span><span class="case">${esc(d.case_number || "—")}</span><span class="pages">${esc(pagesTxt)}</span>${tt ? `<span class="time">${tt}</span>` : ""}</span>${tag}</button>`;
 }
 function renderList() {
   const list = $("list");
@@ -1002,7 +1039,7 @@ function panel(title, right, pct, note) {
 
 const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 function head(d, right) {
-  return `<div class="dochead"><div><span class="lbl">Dokument ${sel + 1} od ${docs.length}</span><div class="case">${esc(d.case_number || "—")}</div></div>${right}</div>`;
+  return `<div class="dochead"><div><span class="lbl">Dokument ${sel + 1} od ${docs.length}${(t => Object.keys(t).length ? ` · prebrano: ${timeTxt(t)}${faster(t)}` : "")(timesOf(d))}</span><div class="case">${esc(d.case_number || "—")}</div></div>${right}</div>`;
 }
 function reading(d) {
   const m = $("mirror");
