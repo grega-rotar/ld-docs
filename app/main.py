@@ -83,6 +83,8 @@ def health():
     out = {"ok": True, "reader": ex.DEFAULT_READER, "readers": readers(), "job_ttl_days": JOB_TTL // 86400}
     if ex.LOCAL in ex.READERS:
         out["local"] = ex.reader_health()
+    if ex.CLAUDE in ex.READERS:
+        out["claude"] = {"model": ex.MODEL}
     return out
 
 
